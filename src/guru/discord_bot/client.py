@@ -32,6 +32,8 @@ from guru.services.query_service import QueryService
 from guru.services.ratelimit_service import RateLimiter, user_hash
 from guru.services.review_service import ReviewService
 from guru.services.router import Delete, IncomingMessage, MessageRouter, Notice, Reply
+from guru.services.web_service import WebService
+from guru.web.fetcher import SafeFetcher
 
 if TYPE_CHECKING:
     from guru.app import Runtime
@@ -70,6 +72,7 @@ class GuruBot(discord.Client):
         self.configs = ConfigService(rt.db)
         self.ingest = IngestService(rt.db)
         self.reviews = ReviewService(rt.db)
+        self.web = WebService(rt.db, self.registry, SafeFetcher(rt.settings.web), None)
         self.router: MessageRouter | None = None
         self._jobs_stop = asyncio.Event()
         self._jobs_task: asyncio.Task[None] | None = None

@@ -169,6 +169,8 @@ class SourceMessage:
     audience_channel_id: int | None = None
     endorsed_by: int | None = None
     endorser_tier: int | None = None
+    origin: str = "discord"
+    chunk_id: int | None = None
 
 
 @dataclass

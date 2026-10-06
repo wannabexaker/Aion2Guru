@@ -48,6 +48,16 @@ class EmbeddingSettings(BaseModel):
     timeout_s: float = 60.0
 
 
+class WebSettings(BaseModel):
+    user_agent: str = "GuruKnowledgeBot/0.1 (+https://github.com/wannabexaker/Aion2Guru)"
+    timeout_s: float = 20.0
+    max_bytes: int = 3_000_000
+    max_redirects: int = 5
+    min_host_interval_s: float = 2.0
+    # Self-hosted SearxNG for source discovery (D-11). Empty = discovery disabled.
+    searxng_url: str = ""
+
+
 class ApiSettings(BaseModel):
     host: str = "127.0.0.1"
     port: int = 8080
@@ -87,6 +97,7 @@ class Settings(BaseSettings):
     llm_providers: dict[str, LLMProviderSettings] = Field(default_factory=lambda: {"local": LLMProviderSettings()})
     llm_tasks: dict[str, LLMTaskSettings] = Field(default_factory=dict)
     embeddings: EmbeddingSettings = Field(default_factory=EmbeddingSettings)
+    web: WebSettings = Field(default_factory=WebSettings)
 
     @classmethod
     def settings_customise_sources(

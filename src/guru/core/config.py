@@ -380,6 +380,37 @@ class FaqCfg(_Base):
     on_disputed: Literal["banner", "deprecate", "none"] = "banner"
 
 
+class DiscoveryCfg(_Base):
+    """D-11: find new sources via search (SearxNG). Budgeted; new sources start at the lowest tier."""
+
+    enabled: bool = False
+    max_queries_per_day: int = Field(default=20, ge=0, le=500)
+    max_results_per_query: int = Field(default=8, ge=1, le=30)
+    languages: list[Literal["en", "el"]] = ["en"]
+    seed_queries: list[str] = []
+    gap_min_queries: int = Field(default=2, ge=1)  # unanswered questions asked ≥N times become searches
+
+
+class ReputationCfg(_Base):
+    """D-11: source trust follows agreement with verified knowledge (statistics, not AI). Tier 4 is manual only."""
+
+    enabled: bool = True
+    min_claims: int = 5
+    tier3_score: float = 0.85
+    tier3_min_claims: int = 10
+    tier2_score: float = 0.6
+    tier1_below: float = 0.35
+
+
+class WebCfg(_Base):
+    discovery: DiscoveryCfg = DiscoveryCfg()
+    reputation: ReputationCfg = ReputationCfg()
+    recrawl_seconds: int = Field(default=86400, ge=600)
+    max_urls_per_source: int = Field(default=50, ge=1, le=1000)
+    chunk_chars: int = Field(default=1600, ge=400, le=6000)
+    gone_after_failures: int = Field(default=3, ge=1)
+
+
 class PromptsCfg(_Base):
     persona: str = ""
     answer_style: str = ""
@@ -438,6 +469,7 @@ class ProfileConfig(_Base):
         return v
 
     faq: FaqCfg = FaqCfg()
+    web: WebCfg = WebCfg()
     prompts: PromptsCfg = PromptsCfg()
     retention: RetentionCfg = RetentionCfg()
 

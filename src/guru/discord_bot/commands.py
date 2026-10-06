@@ -215,6 +215,13 @@ def register_commands(bot: GuruBot) -> None:
         )
         await respond_text(interaction, f"`{record}` marked obsolete")
 
+    @kb.command(name="ingest-url", description="Read a web page into the knowledge pipeline")
+    @app_commands.describe(url="https://… page about the game")
+    async def kb_ingest_url(interaction: discord.Interaction, url: str) -> None:
+        ctx = Ctx(bot, interaction)
+        await bot.web.ingest_url(ctx.require_state(), ctx.principal, url.strip())
+        await respond_text(interaction, tr("capture.ok", ctx.style))
+
     tree.add_command(kb)
 
     # ---------------------------------------------------------------- context menu (explicit capture)

@@ -317,7 +317,7 @@ def render_review(task: dict[str, Any], style: str = "el") -> MessagePayload:
             link = (
                 f"https://discord.com/channels/{q['guild_id']}/{q['channel_id']}/{q['message_id']}"
                 if q.get("message_id")
-                else None
+                else q.get("url")
             )
             who = f"<@{q['author_id']}>" if q.get("author_id") else ""
             lines.append(

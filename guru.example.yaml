@@ -34,3 +34,8 @@ embeddings:
   base_url: http://host.docker.internal:11434
   model: bge-m3
   dims: 1024
+
+web:
+  # Self-hosted SearxNG (docker compose service) for source discovery. Empty = discovery off.
+  searxng_url: http://searxng:8080
+  min_host_interval_s: 2

@@ -17,7 +17,7 @@ Generic core (`guru`) με profiles· το πρώτο profile είναι το AI
 | M1 Walking skeleton χωρίς AI (config/profiles, `/settings`, permissions, access enforcement, rate limits, `/kb`, `/ask`, mentions, FTS retrieval) | ✅ |
 | M2 Discord ingestion (home channel, 📌, «Add to knowledge», `μάθε:`), Ollama extraction με validators, embeddings dedupe, conflicts, edit/delete sync, moderator review channel, learned gate | ✅ |
 | M3 Vector retrieval (FTS → trigram → vector, RRF), LLM σύνθεση μόνο όταν χρειάζεται με grounding checks και fallback, conflicts με όλες τις πλευρές, answer cache (epoch/visibility), LLM quota, follow-ups | ✅ |
-| M4 Web πηγές: discovery (SearxNG), validation, source reputation | ⏳ |
+| M4 Web: SSRF-safe fetcher, robots, conditional GET, extraction/dates/near-dup/chunking, web claims, liveness, SearxNG discovery (budget, κενά γνώσης), source reputation, `/kb ingest-url` | ✅ |
 | M5 FAQ (forum, έγκριση, ενημέρωση/deprecation) | ⏳ |
 
 ## Εγκατάσταση (ένας host, Docker)

@@ -34,5 +34,14 @@ services:
     read_only: true
     tmpfs: [/tmp]
 
+  # Source discovery (D-11). Internal network only; guru.yaml → web.searxng_url: http://searxng:8080
+  searxng:
+    image: searxng/searxng:latest
+    restart: unless-stopped
+    volumes:
+      - ./deploy/searxng:/etc/searxng
+    environment:
+      SEARXNG_BASE_URL: http://searxng:8080/
+
 volumes:
   pgdata:

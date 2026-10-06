@@ -10,6 +10,7 @@ from typing import Any
 
 import asyncpg
 
+from guru.core.applicability import version_at
 from guru.core.config import ProfileConfig
 from guru.core.knowledge import EvidenceFacts, derive, policy_for
 from guru.core.text import normalize
@@ -271,10 +272,11 @@ async def recompute(conn: asyncpg.Connection, claim_id: int, cfg: ProfileConfig,
         raise LookupError(f"claim {claim_id} not found")
     rows = await conn.fetch(
         """SELECT stance, trust_tier, independence_group, origin, evidence_at, quote_verified, extractor,
-                  endorser_tier, audience_channel_id, active
+                  endorser_tier, audience_channel_id, active, version_inferred
              FROM claim_evidence WHERE claim_id = $1""",
         claim_id,
     )
+    current_version = version_at(cfg, now)
     open_conflict = await conn.fetchval(
         """SELECT EXISTS (SELECT 1 FROM conflict_members m JOIN conflicts k ON k.id = m.conflict_id
                            WHERE m.claim_id = $1 AND k.status = 'open')""",
@@ -292,9 +294,21 @@ async def recompute(conn: asyncpg.Connection, claim_id: int, cfg: ProfileConfig,
             endorser_tier=r["endorser_tier"],
             audience_channel_id=r["audience_channel_id"],
             active=r["active"],
+            version_match=(
+                None if not (current_version and r["version_inferred"]) else r["version_inferred"] == current_version
+            ),
         )
         for r in rows
     ]
+    # Volatile categories: knowledge seen only on older versions is flagged for review (🕒).
+    volatile = False
+    if claim["category_key"]:
+        cat = next((c for c, _ in cfg.flat_categories() if c.key == claim["category_key"]), None)
+        volatile = bool(cat and cat.settings.volatile_on_version)
+    versioned = [r for r in rows if r["active"] and r["stance"] == "supports" and r["version_inferred"]]
+    stale = bool(
+        volatile and current_version and versioned and all(r["version_inferred"] != current_version for r in versioned)
+    )
     derived = derive(
         evidence,
         human_verified=claim["human_verified_by"] is not None,
@@ -318,7 +332,8 @@ async def recompute(conn: asyncpg.Connection, claim_id: int, cfg: ProfileConfig,
         """UPDATE claims
               SET verification = $2, verification_basis = $3, evidence_summary = $4, support_score = $5,
                   origins = $6, is_public = $7, audience_channel_ids = $8, last_evidence_at = $9,
-                  lifecycle = $10, lifecycle_reason = coalesce($11, lifecycle_reason), updated_at = now()
+                  lifecycle = $10, lifecycle_reason = coalesce($11, lifecycle_reason),
+                  needs_review = needs_review OR $12, updated_at = now()
             WHERE id = $1""",
         claim_id,
         derived.verification,
@@ -331,6 +346,7 @@ async def recompute(conn: asyncpg.Connection, claim_id: int, cfg: ProfileConfig,
         derived.last_evidence_at,
         lifecycle,
         lifecycle_reason,
+        stale,
     )
     if changed:
         await bump_epoch(conn, claim["profile_id"])

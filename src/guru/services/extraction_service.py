@@ -11,6 +11,7 @@ from typing import Any
 
 import asyncpg
 
+from guru.core.applicability import version_at
 from guru.core.ingest import (
     ExtractionOutput,
     SourceMessage,
@@ -137,7 +138,25 @@ class ExtractionService:
                 last,
             )
         sources, authors = self._sources(candidates, list(context), cfg.ingestion.window.max_tokens)
-        prompt = extraction_prompt(cfg, list(sources.values()), authors)
+        prefilter_scores = {
+            r["id"]: int(((r["meta"] or {}).get("prefilter") or {}).get("score", 0)) for r in candidates
+        }
+        return await self.extract_and_link(state, sources, authors, prefilter_scores=prefilter_scores)
+
+    async def extract_and_link(
+        self,
+        state: ProfileState,
+        sources: dict[str, SourceMessage],
+        authors: dict[str, str],
+        *,
+        web: bool = False,
+        prefilter_scores: dict[int, int] | None = None,
+    ) -> dict[str, Any]:
+        """Shared by Discord windows and web documents: LLM → validators → link each valid claim."""
+        if self.llm is None or not self.llm.enabled("extract"):
+            raise LLMUnavailable("extract task not configured")
+        cfg = state.config
+        prompt = extraction_prompt(cfg, list(sources.values()), authors, web=web)
         keys = sorted(state.category_ids)
         result = await self.llm.run(
             "extract",
@@ -158,9 +177,6 @@ class ExtractionService:
             version_patterns=version_patterns,
         )
         extractor = f"llm:{result.model}@{prompt.version}"
-        prefilter_scores = {
-            r["id"]: int(((r["meta"] or {}).get("prefilter") or {}).get("score", 0)) for r in candidates
-        }
         claim_ids = []
         for vc in valid:
             claim_ids.append(await self.link(state, vc, extractor, prefilter_scores))
@@ -294,12 +310,13 @@ class ExtractionService:
                         extractor=extractor,
                         trust_tier=src.author_tier,
                         independence_group=src.group,
-                        origin="discord",
+                        origin=src.origin,
                         evidence_at=src.published_at,
                         audience_channel_id=src.audience_channel_id,
                         endorsed_by=src.endorsed_by,
                         endorser_tier=src.endorser_tier,
-                        version_inferred=vc.version,
+                        version_inferred=vc.version or version_at(cfg, src.published_at),
+                        chunk_id=src.chunk_id,
                     ),
                 )
             verification = await kstore.recompute(conn, claim_id, cfg)
@@ -357,7 +374,7 @@ class ExtractionService:
         quotes = []
         for src, quote in vc.evidence[:3]:
             o = await conn.fetchrow(
-                """SELECT o.guild_id, o.channel_id, o.message_id, a.discord_user_id
+                """SELECT o.guild_id, o.channel_id, o.message_id, o.url, a.discord_user_id
                      FROM observations o LEFT JOIN actors a ON a.id = o.author_actor_id WHERE o.id = $1""",
                 src.observation_id,
             )
@@ -369,6 +386,7 @@ class ExtractionService:
                     "channel_id": o["channel_id"],
                     "message_id": o["message_id"],
                     "author_id": o["discord_user_id"],
+                    "url": o["url"],
                 }
             )
         return {

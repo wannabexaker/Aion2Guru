@@ -121,7 +121,21 @@ intents:
     patterns: ['(?i)\b(how to|how do i|πώς|πως|pws|pos)\b']
     examples: ["how do I enchant gear", "πώς κάνω craft"]
 
-sources: []               # discovered and scored automatically (W-07, W-08)
+sources: []               # add known sources here or let discovery find them (W-07, W-08)
+
+web:
+  discovery:
+    enabled: true
+    max_queries_per_day: 20
+    languages: [en]
+    seed_queries:
+      - "AION 2 global guide"
+      - "AION 2 patch notes"
+      - "AION 2 class guide"
+      - "AION 2 dungeon guide"
+      - "AION 2 enchanting guide"
+  reputation:
+    enabled: true
 domain_trust:
   - { pattern: "*", tier: 1 }
 

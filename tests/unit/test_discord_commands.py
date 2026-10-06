@@ -20,7 +20,7 @@ def test_command_tree_serializes() -> None:
     assert set(payloads) == {"ask", "kb", "setup", "settings", "admin", "Add to knowledge"}
     assert payloads["Add to knowledge"]["type"] == 3  # message context menu
     kb_subs = {o["name"] for o in payloads["kb"]["options"]}
-    assert kb_subs == {"add", "show", "verify", "retract", "obsolete"}
+    assert kb_subs == {"add", "show", "verify", "retract", "obsolete", "ingest-url"}
     ask_opts = {o["name"]: o for o in payloads["ask"]["options"]}
     assert ask_opts["question"]["required"] and ask_opts["category"]["autocomplete"]
     for p in payloads.values():

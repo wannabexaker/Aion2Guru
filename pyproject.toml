@@ -19,6 +19,9 @@ dependencies = [
   "google-re2>=1.1",
   "rapidfuzz>=3.14.6",
   "numpy>=2.5.3",
+  "trafilatura>=2.3.0",
+  "feedparser>=6.0.14",
+  "defusedxml>=0.7.1",
 ]
 
 [dependency-groups]
@@ -65,5 +68,5 @@ strict = true
 warn_unused_ignores = true
 
 [[tool.mypy.overrides]]
-module = ["asyncpg.*", "pgvector.*", "re2", "discord.*"]
+module = ["asyncpg.*", "pgvector.*", "re2", "discord.*", "feedparser.*", "defusedxml.*", "trafilatura.*", "htmldate.*", "tld.*"]
 ignore_missing_imports = true

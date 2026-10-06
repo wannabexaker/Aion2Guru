@@ -1,0 +1,11 @@
+# Minimal SearxNG config for guru source discovery. JSON output is required.
+use_default_settings: true
+server:
+  secret_key: "CHANGE-ME-generate-with-openssl-rand-hex-32"
+  limiter: false
+  image_proxy: false
+search:
+  safe_search: 1
+  formats:
+    - html
+    - json
