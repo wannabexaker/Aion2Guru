@@ -1,0 +1,176 @@
+# AION 2 profile template. Channels, roles and trust are set from Discord with /settings.
+# Validated against guru.core.config.ProfileConfig (schema v1).
+schema_version: 1
+
+profile:
+  slug: aion2
+  name: "AION 2"
+  description: >
+    MMORPG AION 2 (Global): classes, skills, dungeons, bosses, items, enchanting,
+    crafting, economy, events, patches.
+  languages:
+    canonical: en
+    accepted: [en, el]
+    answer: match_question
+    greeklish: true
+  keywords: [aion, aion2, "aion 2", ncsoft, daeva, abyss, elyos, asmodian, kinah, stigma]
+
+dimensions:
+  game_version:
+    type: ordered
+    infer_from_date: true
+    patterns: ['(?i)\b(?:v|ver\.?|version|patch)\s*(\d+\.\d+(?:\.\d+)?)\b']
+    values: []            # added by moderators as Global patches ship
+  region:
+    type: enum
+    values: [GLOBAL, KR, TW]
+    default: [GLOBAL]
+
+channels: []              # /settings → home channel, mod review channel
+
+categories:
+  - key: general
+    name: General
+    settings: { half_life_days: 90 }
+  - key: classes
+    name: Classes & Builds
+    keywords: [class, classes, build, builds, stigma, rotation, gladiator, templar, assassin, ranger,
+               sorcerer, spiritmaster, cleric, chanter, κλάση, κλάσεις, μπιλντ, klasi, klash]
+    settings: { half_life_days: 60, volatile_on_version: true, faq_eligible: true }
+    children:
+      - key: skills
+        name: Skills
+        keywords: [skill, skills, cooldown, cd, buff, debuff, σκιλ]
+        settings: { half_life_days: 45, volatile_on_version: true }
+  - key: content
+    name: Dungeons & Bosses
+    keywords: [dungeon, dungeons, instance, raid, boss, bosses, respawn, spawn, field boss, μπος, μπόσ, ντανζον]
+    settings: { half_life_days: 60, volatile_on_version: true, faq_eligible: true }
+  - key: items
+    name: Items, Gear & Enchanting
+    keywords: [item, items, gear, weapon, armor, accessory, enchant, enchanting, drop, drops, manastone,
+               αντικείμενο, οπλο, όπλο, πανοπλία, ντροπ]
+    settings: { half_life_days: 60, volatile_on_version: true, faq_eligible: true }
+  - key: economy
+    name: Crafting & Economy
+    keywords: [craft, crafting, gather, gathering, market, broker, kinah, price, κίνα, κραφτ]
+    settings: { half_life_days: 14, volatile_on_version: true }
+  - key: pvp
+    name: PvP & Abyss
+    keywords: [pvp, abyss, siege, fortress, rank, ranking, άβυσσος, abyssos]
+    settings: { half_life_days: 45, volatile_on_version: true, faq_eligible: true }
+  - key: events
+    name: Events
+    keywords: [event, events, reward, rewards, login, εβεντ, ιβεντ]
+    settings: { half_life_days: 10 }
+  - key: patches
+    name: Patch Notes & Updates
+    keywords: [patch, patches, update, maintenance, hotfix, notes, αναβάθμιση]
+    settings: { half_life_days: 30 }
+  - key: guides
+    name: Guides & How-to
+    keywords: [guide, guides, how to, tutorial, οδηγός]
+    settings: { half_life_days: 90, faq_eligible: true }
+  - key: lore
+    name: Lore
+    keywords: [lore, story, ιστορία]
+    settings: { half_life_days: null }
+
+entity_types:
+  - key: class
+    name: Class
+    default_category: classes
+    attributes:
+      role: { schema: { type: string, enum: [tank, melee_dps, ranged_dps, healer, support] },
+              label: { en: Role, el: Ρόλος } }
+  - key: boss
+    name: Boss
+    default_category: content
+    attributes:
+      location: { schema: { type: string }, label: { en: Location, el: Τοποθεσία } }
+      level:    { schema: { type: integer, minimum: 1 }, label: { en: Level, el: Επίπεδο } }
+      respawn:  { schema: { type: string }, label: { en: Respawn, el: Respawn } }
+  - key: item
+    name: Item
+    default_category: items
+    attributes:
+      slot:          { schema: { type: string }, label: { en: Slot, el: Θέση } }
+      grade:         { schema: { type: string }, label: { en: Grade, el: Grade } }
+      obtained_from: { schema: { type: string }, label: { en: Obtained from, el: Από πού βγαίνει } }
+  - key: dungeon
+    name: Dungeon
+    default_category: content
+    attributes:
+      min_level:   { schema: { type: integer }, label: { en: Minimum level, el: Ελάχιστο επίπεδο } }
+      entry_limit: { schema: { type: string }, label: { en: Entry limit, el: Όριο εισόδων } }
+
+intents:
+  - key: boss_respawn
+    description: When a boss respawns
+    target: { entity_type: boss, attribute: respawn, answer_mode: structured }
+    patterns: ['(?i)\b(respawn|spawn|εμφανίζεται|βγαίνει|vgainei)\b']
+    examples: ["when does the boss respawn", "κάθε πόσο βγαίνει ο boss"]
+  - key: item_source
+    description: Where an item comes from
+    target: { entity_type: item, attribute: obtained_from, answer_mode: structured }
+    patterns: ['(?i)\b(drops?|where.*get|πού.*(βρίσκω|πέφτει|βγαίνει)|pou.*(vriskw|pefti|peftei|vgainei))\b']
+    examples: ["where does this item drop", "πού πέφτει αυτό το item"]
+  - key: how_to
+    description: Instructions / procedure
+    target: { category: guides, answer_mode: auto }
+    patterns: ['(?i)\b(how to|how do i|πώς|πως|pws|pos)\b']
+    examples: ["how do I enchant gear", "πώς κάνω craft"]
+
+sources: []               # discovered and scored automatically (W-07, W-08)
+domain_trust:
+  - { pattern: "*", tier: 1 }
+
+trust:
+  default_member_tier: 2
+  new_account_days: 14
+  verification_policy:
+    auto_verify_official: true
+    auto_verify_trusted_explicit: true
+    trusted_explicit_min_tier: 3
+
+permissions: []           # /settings → who may talk to the AI, moderators, admins
+
+access:
+  unauthorized_action: delete
+  notice_seconds: 8
+
+rate_limits:
+  default: { per_minute: 3, per_hour: 20, per_day: 60, llm_per_day: 30 }
+
+review:
+  quorum: 1
+  claim_keep: { enabled: true, auto: { enabled: false, threshold: 0.95, min_labels: 200 } }
+  answer_rating: { enabled: true, sample_rate: 1.0, only_llm: false }
+
+search:
+  default_scope: all
+  default_min_state: unverified
+
+scope_tokens:
+  faq: [faq, συχνές, sixnes]
+  verified: [verified, επιβεβαιωμένα, epivevaiomena]
+  internal: [internal, kb, εσωτερικά, eswterika]
+  web: [web, internet]
+  all: [all, όλα, ola]
+
+prompts:
+  persona: >
+    You are the AION 2 knowledge assistant of this Discord community. You answer only from the
+    records you are given.
+  answer_style: >
+    At most 120 words. Use bullet points for steps. Mention version/region when the records do.
+  extraction_guidelines: >
+    Keep only verifiable game facts (mechanics, numbers, locations, drops, procedures, builds).
+    Ignore opinions, jokes, rumors without a source and questions.
+  faq_style: >
+    Question phrased like a player would ask it. Self-contained answer, at most 80 words.
+
+retention:
+  context_only_days: 14
+  query_log_days: 30
+  on_source_delete: keep_knowledge

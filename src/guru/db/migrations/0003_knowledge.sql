@@ -152,6 +152,8 @@ CREATE TABLE claim_evidence (
   evidence_at         timestamptz NOT NULL,
   version_inferred    text,
   audience_channel_id bigint,                     -- NULL = public evidence
+  endorsed_by         bigint REFERENCES actors,   -- human who explicitly captured/confirmed it (/kb add, 📌)
+  endorser_tier       smallint CHECK (endorser_tier BETWEEN 0 AND 4),
   active              boolean NOT NULL DEFAULT true,
   deactivated_reason  text CHECK (deactivated_reason IN ('source_edited','source_deleted','source_changed','unlinked','purged','merged','rejected')),
   created_at          timestamptz NOT NULL DEFAULT now(),
