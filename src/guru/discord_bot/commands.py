@@ -215,6 +215,12 @@ def register_commands(bot: GuruBot) -> None:
         )
         await respond_text(interaction, f"`{record}` marked obsolete")
 
+    @kb.command(name="forget-me", description="Delete everything the bot stored from your messages")
+    async def kb_forget_me(interaction: discord.Interaction) -> None:
+        ctx = Ctx(bot, interaction)
+        count = await bot.ingest.forget_user(ctx.require_state().profile_id, ctx.principal.user_id)
+        await respond_text(interaction, f"🗑️ {count} stored message(s) erased. Knowledge confirmed elsewhere remains.")
+
     @kb.command(name="ingest-url", description="Read a web page into the knowledge pipeline")
     @app_commands.describe(url="https://… page about the game")
     async def kb_ingest_url(interaction: discord.Interaction, url: str) -> None:

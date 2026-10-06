@@ -195,6 +195,7 @@ class QueryService:
         self.llm = llm
         self.llm_quota = llm_quota
         self._degraded = False
+        self.cache_enabled = True  # `guru eval` measures the real pipeline, not the cache
 
     # ------------------------------------------------------------ pipeline
     async def answer(self, req: QueryRequest) -> Answer:
@@ -554,7 +555,7 @@ class QueryService:
         return sha("\x1f".join(parts))
 
     async def _cache_get(self, state: ProfileState, key: bytes) -> Answer | None:
-        if state.config.answer.cache_ttl_hours <= 0:
+        if not self.cache_enabled or state.config.answer.cache_ttl_hours <= 0:
             return None
         row = await self.db.fetchrow(
             """SELECT a.response FROM answer_cache a JOIN profiles p ON p.id = a.profile_id
@@ -570,7 +571,9 @@ class QueryService:
         return answer_from_json(row["response"])
 
     async def _cache_put(self, state: ProfileState, key: bytes, answer: Answer) -> None:
-        if state.config.answer.cache_ttl_hours <= 0 or answer.degraded or answer.mode in ("empty", "faq_unavailable"):
+        if not self.cache_enabled or state.config.answer.cache_ttl_hours <= 0 or answer.degraded:
+            return
+        if answer.mode == "empty":
             return
         await self.db.execute(
             """INSERT INTO answer_cache (cache_key, profile_id, knowledge_epoch, config_version, response)

@@ -4,6 +4,12 @@
 > Μέγεθος: **S** ≤ 1 ημέρα · **M** 2–3 ημέρες · **L** 4–5 ημέρες (ενδεικτικά, 1 developer).
 > Κάθε task ολοκληρώνεται με: tests πράσινα, ruff/mypy καθαρά, audit όπου αλλάζει γνώση/config.
 
+## Κατάσταση υλοποίησης (2026-10-06)
+
+M0–M6 υλοποιημένα με tests (147, πραγματικό Postgres). Εκτός MVP / Phase 2: **Q-06** (structured answers από
+entity attributes), **A-06** prototypes (εγκαταλείφθηκε — βλ. DESIGN §21), **H-05** performance/βαθμονόμηση στο
+target hardware (γίνεται με `guru eval` στο δικό σου μηχάνημα), **H-06** staging smoke (checklist στο RUNBOOK §8).
+
 ## Milestones
 
 ```mermaid

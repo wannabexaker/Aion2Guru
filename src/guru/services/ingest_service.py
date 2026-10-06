@@ -373,3 +373,37 @@ class IngestService:
                 ids,
             )
         return len(rows)
+
+    async def forget_user(self, profile_id: int, user_id: int) -> int:
+        """GDPR erasure (D-06): purge everything this user wrote; knowledge survives only if supported elsewhere."""
+        async with self.db.transaction() as conn:
+            actor_id = await conn.fetchval("SELECT id FROM actors WHERE discord_user_id = $1", user_id)
+            if actor_id is None:
+                return 0
+            obs = [r["id"] for r in await conn.fetch(
+                """UPDATE observations SET content = NULL, status = 'purged', meta = '{}'::jsonb
+                    WHERE profile_id = $1 AND author_actor_id = $2 AND status <> 'purged' RETURNING id""",
+                profile_id, actor_id,
+            )]  # fmt: skip
+            if obs:
+                await conn.execute(
+                    "UPDATE observation_revisions SET content = NULL WHERE observation_id = ANY($1::bigint[])", obs
+                )
+                claims = await conn.fetch(
+                    """UPDATE claim_evidence SET active = false, deactivated_reason = 'purged', quote = NULL
+                        WHERE observation_id = ANY($1::bigint[]) AND active RETURNING claim_id""",
+                    obs,
+                )
+                if claims:
+                    await queue.enqueue(
+                        conn,
+                        "knowledge.recompute",
+                        {"profile_id": profile_id, "claim_ids": sorted({c["claim_id"] for c in claims})},
+                        priority=30,
+                    )
+            await conn.execute(
+                """INSERT INTO audit_log (actor_id, action, profile_id, target_type, target_id, after)
+                   VALUES ($1, 'user.forget', $2, 'user', $3, $4)""",
+                actor_id, profile_id, "self", {"observations": len(obs)},
+            )  # fmt: skip
+        return len(obs)

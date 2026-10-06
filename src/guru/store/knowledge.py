@@ -225,7 +225,10 @@ async def add_evidence(conn: asyncpg.Connection, e: NewEvidence) -> int | None:
               trust_tier, independence_group, origin, evidence_at, version_inferred, audience_channel_id,
               endorsed_by, endorser_tier)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
-           ON CONFLICT (claim_id, observation_id, observation_rev, stance) DO NOTHING
+           ON CONFLICT (claim_id, observation_id, observation_rev, stance) DO UPDATE
+             -- A later explicit capture (📌, "Add to knowledge") endorses evidence that already exists.
+             SET endorsed_by = coalesce(EXCLUDED.endorsed_by, claim_evidence.endorsed_by),
+                 endorser_tier = greatest(EXCLUDED.endorser_tier, claim_evidence.endorser_tier)
            RETURNING id""",
         e.claim_id,
         e.observation_id,

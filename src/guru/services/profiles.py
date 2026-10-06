@@ -113,6 +113,7 @@ class ProfileRegistry:
         self._by_id: dict[int, ProfileState] = {}
         self._lock = asyncio.Lock()
         self._listener: asyncpg.Connection | None = None
+        self._tasks: set[asyncio.Task[None]] = set()
 
     async def reload(self) -> None:
         async with self._lock, self.db.connection() as conn:
@@ -129,7 +130,9 @@ class ProfileRegistry:
         """Reload on config changes (NOTIFY from ConfigService.apply)."""
 
         def _on_notify(*_: object) -> None:
-            asyncio.get_running_loop().create_task(self.reload())
+            task = asyncio.get_running_loop().create_task(self.reload())
+            self._tasks.add(task)  # keep a reference until done
+            task.add_done_callback(self._tasks.discard)
 
         self._listener = await asyncpg.connect(dsn)
         await self._listener.add_listener(CONFIG_NOTIFY_CHANNEL, _on_notify)

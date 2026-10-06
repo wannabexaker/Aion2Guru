@@ -6,6 +6,7 @@ Output is plain data; the Discord adapter turns it into embeds/views.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -156,6 +157,15 @@ DESC_LIMIT = 4096
 FIELD_LIMIT = 1024
 
 
+_MASKED_LINK = re.compile(r"\[([^\]\n]{1,200})\]\(\s*<?(https?://[^)\s>]+)>?\s*\)")
+
+
+def safe_markdown(text: str) -> str:
+    """Unmask markdown links so the real URL is always visible (anti-phishing), no mass pings."""
+    text = _MASKED_LINK.sub(lambda m: f"{m.group(1)} (<{m.group(2)}>)", text)
+    return text.replace("@everyone", "@\u200beveryone").replace("@here", "@\u200bhere")
+
+
 def clip(text: str, limit: int) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
@@ -201,7 +211,7 @@ def render_answer(answer: Any, profile_name: str) -> MessagePayload:
 
     if answer.mode == "extractive":
         item = answer.items[0]
-        desc = item.statement
+        desc = safe_markdown(item.statement)
         if item.needs_review:
             desc += "\n\n" + tr("answer.needs_review", style)
         elif item.verification == "unverified":
@@ -226,7 +236,7 @@ def render_answer(answer: Any, profile_name: str) -> MessagePayload:
 
     if answer.mode == "faq" and answer.faq:
         f = answer.faq
-        desc = f["answer"]
+        desc = safe_markdown(f["answer"])
         if f.get("banner"):
             desc = tr(f"faq.banner.{f['banner']}", style) + "\n\n" + desc
         fields = [EmbedField(tr("faq.open", style), f"<{f['url']}>")] if f.get("url") else []
@@ -246,7 +256,8 @@ def render_answer(answer: Any, profile_name: str) -> MessagePayload:
         for item in answer.items:
             src = item.sources[0] if item.sources else None
             where = f" — {source_line(1, src, style)[4:]}" if src else ""
-            lines.append(f"• {BADGE.get(item.verification, '')} {clip(item.statement, 300)} `K-{item.claim_id}`{where}")
+            text = clip(safe_markdown(item.statement), 300)
+            lines.append(f"• {BADGE.get(item.verification, '')} {text} `K-{item.claim_id}`{where}")
         return MessagePayload(
             embed=EmbedData(clip("\n".join(lines), DESC_LIMIT), COLOR["disputed"]), buttons=list(FEEDBACK_BUTTONS)
         )
@@ -256,7 +267,7 @@ def render_answer(answer: Any, profile_name: str) -> MessagePayload:
         status = status_line(state, None, style)
         if state == "corroborated" and any(i.verification == "unverified" for i in answer.items):
             status = f"{BADGE['corroborated']} {tr('answer.mixed', style)}"
-        desc = answer.text or ""
+        desc = safe_markdown(answer.text or "")
         if state == "unverified":
             desc += "\n\n_" + tr("answer.unverified_note", style) + "_"
         sources = [s for i in answer.items for s in i.sources][:4]
@@ -275,7 +286,9 @@ def render_answer(answer: Any, profile_name: str) -> MessagePayload:
     for item in answer.items:
         src = item.sources[0] if item.sources else None
         link = f" — <{src.link}>" if src and src.link else ""
-        lines.append(f"• {BADGE.get(item.verification, '')} {clip(item.statement, 300)} `K-{item.claim_id}`{link}")
+        lines.append(
+            f"• {BADGE.get(item.verification, '')} {clip(safe_markdown(item.statement), 300)} `K-{item.claim_id}`{link}"
+        )
     worst = "disputed" if any(i.verification == "disputed" for i in answer.items) else answer.items[0].verification
     return MessagePayload(
         embed=EmbedData(clip("\n".join(lines), DESC_LIMIT), COLOR.get(worst, COLOR["none"])),
@@ -354,7 +367,7 @@ def render_review(task: dict[str, Any], style: str = "el") -> MessagePayload:
             fields.append(EmbedField(tr("field.sources", style), clip("\n".join(lines), FIELD_LIMIT)))
         return MessagePayload(
             embed=EmbedData(
-                clip(str(p.get("statement", "")), DESC_LIMIT),
+                clip(safe_markdown(str(p.get("statement", ""))), DESC_LIMIT),
                 COLOR["unverified"],
                 title=tr("review.keep_title", style),
                 fields=fields,
@@ -393,7 +406,8 @@ def render_review(task: dict[str, Any], style: str = "el") -> MessagePayload:
     items = p.get("items", [])
     answer = (
         "\n".join(
-            f"• {BADGE.get(i.get('verification', ''), '')} {clip(i.get('statement', ''), 300)} `K-{i.get('claim_id')}`"
+            f"• {BADGE.get(i.get('verification', ''), '')} "
+            f"{clip(safe_markdown(i.get('statement', '')), 300)} `K-{i.get('claim_id')}`"
             for i in items
         )
         or "—"
@@ -425,7 +439,7 @@ def render_review(task: dict[str, Any], style: str = "el") -> MessagePayload:
 
 def render_faq_post(faq: dict[str, Any], desired_state: str, style: str = "el") -> MessagePayload:
     """The public FAQ post. Presentation only — the database holds the truth."""
-    desc = faq["answer"]
+    desc = safe_markdown(faq["answer"])
     banner = "deprecated" if desired_state == "deprecated" and not faq.get("banner") else faq.get("banner")
     if banner:
         desc = tr(f"faq.banner.{banner}", style) + "\n\n" + desc

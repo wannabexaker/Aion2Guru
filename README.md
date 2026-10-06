@@ -8,6 +8,7 @@ Generic core (`guru`) με profiles· το πρώτο profile είναι το AI
 | [docs/DESIGN.md](docs/DESIGN.md) | Architecture, data flow, lifecycle, routing, ingestion, FAQ, permissions, LLM strategy, security, testing |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Κλειδωμένες αποφάσεις, ασάφειες, ρίσκα |
 | [docs/BACKLOG.md](docs/BACKLOG.md) | Tasks, dependencies, milestones |
+| [docs/RUNBOOK.md](docs/RUNBOOK.md) | Εγκατάσταση, μοντέλα, βαθμονόμηση, backups, troubleshooting, smoke checklist |
 
 ## Κατάσταση
 
@@ -19,7 +20,7 @@ Generic core (`guru`) με profiles· το πρώτο profile είναι το AI
 | M3 Vector retrieval (FTS → trigram → vector, RRF), LLM σύνθεση μόνο όταν χρειάζεται με grounding checks και fallback, conflicts με όλες τις πλευρές, answer cache (epoch/visibility), LLM quota, follow-ups | ✅ |
 | M4 Web: SSRF-safe fetcher, robots, conditional GET, extraction/dates/near-dup/chunking, web claims, liveness, SearxNG discovery (budget, κενά γνώσης), source reputation, `/kb ingest-url` | ✅ |
 | M5 FAQ: candidates (verified/δημοφιλή), draft (LLM με grounding ή template), έγκριση στο review channel (quorum, four-eyes), forum/text reconciler, banners/deprecation όταν αλλάζει η γνώση, FAQ-first απαντήσεις, `/faq` | ✅ |
-| M6 Hardening: eval harness, security suite, backups/runbook, βαθμονόμηση thresholds | ⏳ |
+| M6 Hardening: `guru doctor`, `guru eval`, security suite, `/kb forget-me`, backups, [runbook](docs/RUNBOOK.md) | ✅ |
 
 ## Εγκατάσταση (ένας host, Docker)
 
@@ -67,6 +68,9 @@ guru config rollback aion2 3
 guru config import-entities aion2 items.csv   # entity_type,canonical_name,aliases(|),category
 guru jobs [--retry ID]
 guru audit [--verify]
+guru doctor                                   # έλεγχος DB/Discord/Ollama/embeddings/SearxNG/profile
+guru eval extraction eval/extraction.example.yaml   # μέτρηση με τα πραγματικά μοντέλα
+guru eval queries eval/queries.example.yaml
 ```
 
 ## Development

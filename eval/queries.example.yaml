@@ -1,0 +1,14 @@
+# guru eval queries eval/queries.example.yaml --profile aion2
+# expect_answer: should the bot answer at all (false = off-topic / unknown → must say it doesn't know)
+# expect_any: substrings expected in the answer text or the returned records
+questions:
+  - q: "κάθε πότε βγαίνει ο boss του Fire Temple;"
+    expect_answer: true
+    expect_any: ["4 hours", "4 ώρες"]
+  - q: "pote vgainei o boss sto fire temple"
+    expect_answer: true
+    expect_any: ["4 hours"]
+  - q: "what is the capital of France?"
+    expect_answer: false
+  - q: "ποιο είναι το καλύτερο κινητό τηλέφωνο;"
+    expect_answer: false

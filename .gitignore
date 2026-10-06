@@ -11,3 +11,4 @@ build/
 .env
 guru.yaml
 .coverage
+backups/

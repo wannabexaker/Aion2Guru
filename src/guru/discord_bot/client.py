@@ -185,14 +185,19 @@ class GuruBot(discord.Client):
         principal = principal_of(message.author)
         if message.webhook_id is not None:
             principal = Principal(user_id=message.author.id, is_bot=True, webhook_id=message.webhook_id)
-        mentions_bot = self.user in message.mentions
+        # Users often pick the bot's managed *role* in autocomplete instead of the bot user.
+        bot_roles = [r for r in getattr(message, "role_mentions", []) if r.tags and r.tags.bot_id == self.user.id]
+        mentions_bot = self.user in message.mentions or bool(bot_roles)
+        content = message.content
+        for role in bot_roles:
+            content = content.replace(f"<@&{role.id}>", f"<@{self.user.id}>")
         incoming = IncomingMessage(
             message_id=message.id,
             guild_id=message.guild.id if message.guild else None,
             channel_id=message.channel.id,
             parent_channel_id=getattr(message.channel, "parent_id", None),
             author=principal,
-            content=message.content,
+            content=content,
             mentions_bot=mentions_bot,
             created_at=message.created_at,
             reference_message_id=message.reference.message_id if message.reference else None,

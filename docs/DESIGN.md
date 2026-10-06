@@ -1098,3 +1098,22 @@ Queries ανά `answered_by` · latency histograms ανά stage · LLM tokens/la
 | Region (D-04) | `GLOBAL` default· άλλα regions με ετικέτα, χαμηλότερο ranking. |
 
 Backlog: **[BACKLOG.md](BACKLOG.md)** · Αποφάσεις/ρίσκα: **[DECISIONS.md](DECISIONS.md)**
+
+---
+
+## 21. Υλοποίηση: αποκλίσεις από το design (τεκμηριωμένες)
+
+| Design | Υλοποίηση | Γιατί |
+|--------|-----------|-------|
+| SQLAlchemy Core + Alembic | **asyncpg** + forward-only, checksummed SQL migrations | Ακριβές DDL (generated columns, partial indexes), λιγότερα deps, κανένα ORM |
+| testcontainers | Πραγματικό Postgres μέσω `GURU_TEST_DATABASE_URL` (CI: service container) | Χωρίς Docker-in-Docker· ίδια εγγύηση (όχι mocks για SQL) |
+| Embedding prototypes για relevance gate | **Δεν υλοποιήθηκε**: aliases + η ίδια η (φθηνή) ανάκτηση αποφασίζουν | Το LLM δεν τρέχει ποτέ χωρίς evidence, άρα το gate δεν θα εξοικονομούσε LLM· αποφεύγεται uncalibrated threshold |
+| Permissions ανά capability | + **role groups** (ai_users, contributors, moderators, admins) | Το `/settings` δουλεύει με ομάδες· τα capabilities προκύπτουν deterministic |
+| 📌 μόνο από human extractor μετρά ως επιβεβαίωση | Οποιαδήποτε **ρητή επιλογή από trusted** (endorsement) επιβεβαιώνει | Η αναδιατύπωση από LLM ελέγχεται από verbatim quote + αριθμούς (V3, V8) |
+| Learned gate | + **ελάχιστο confidence margin** (keep ≥0.8, reject ≤0.2) | Το held-out precision μόνο του επέτρεπε αποφάσεις κοντά στο 0.5 |
+| Reputation όλων των web πηγών | Μόνο **discovered** πηγές· οι curated πηγές του admin δεν αλλάζουν αυτόματα | Η ρητή επιλογή tier από admin υπερισχύει |
+| Answer cache | + **degraded απαντήσεις δεν αποθηκεύονται**· το key περιλαμβάνει μοντέλα | Αλλιώς ένα προσωρινό πρόβλημα (ή το quota ενός χρήστη) θα σερβιριζόταν σε όλους |
+| Structured slot retrieval (entity+attribute) | Schema & config υπάρχουν· η απάντηση από structured slots **δεν** υλοποιήθηκε ακόμη | Χρειάζεται reference data (entities) από την ομάδα· P2 |
+
+Λειτουργίες που μένουν για Phase 2: structured answers από entity attributes, admin web UI, cross-encoder reranker,
+HNSW index (όταν τα claims ξεπεράσουν ~50k), multi-guild, PDF/YouTube πηγές.

@@ -251,3 +251,36 @@ async def test_contradiction_opens_conflict(db: Database) -> None:
     states = [r["verification"] for r in await db.fetch("SELECT verification FROM claims ORDER BY id")]
     assert states == ["disputed", "disputed"]
     assert await db.fetchval("SELECT count(*) FROM conflict_members") == 2
+
+
+async def test_pin_after_passive_extraction_endorses_existing_evidence(db: Database) -> None:
+    state, ingest, ex = await _setup(db)
+    await _home(ingest, state, 90, MEMBER, "The Fire Temple boss respawns every 4 hours")
+    await _run_window(db, ex, state)
+    assert await db.fetchval("SELECT verification FROM claims") == "unverified"
+    msg = CapturedMessage(
+        90, GUILD, HOME, MEMBER.user_id, 2, "The Fire Temple boss respawns every 4 hours", datetime.now(UTC)
+    )
+    obs_id = await ingest.capture_explicit(state, TRUSTED, msg, reason="reaction")
+    await ex.handle_extract(
+        Job(0, "llm.extract", {"profile_id": state.profile_id, "observation_ids": [obs_id]}, 1, 5, None)
+    )
+    assert await db.fetchval("SELECT count(*) FROM claim_evidence") == 1
+    assert await db.fetchval("SELECT verification FROM claims") == "verified"
+
+
+async def test_forget_me_purges_content_and_unsupported_knowledge(db: Database) -> None:
+    state, ingest, ex = await _setup(db)
+    await _home(ingest, state, 95, MEMBER, "The Fire Temple boss respawns every 4 hours")
+    await _home(ingest, state, 96, MEMBER2, "Daily quests reward about 50000 kinah each")
+    await _run_window(db, ex, state)
+    assert await ingest.forget_user(state.profile_id, MEMBER.user_id) == 1
+    assert await db.fetchval("SELECT content FROM observations WHERE message_id = 95") is None
+    assert await db.fetchval("SELECT content FROM observations WHERE message_id = 96") is not None
+    ids = await db.fetchval("SELECT payload->'claim_ids' FROM jobs WHERE kind = 'knowledge.recompute'")
+    await ex.handle_recompute(
+        Job(0, "knowledge.recompute", {"profile_id": state.profile_id, "claim_ids": ids}, 1, 5, None)
+    )
+    lifecycles = {r["statement"]: r["lifecycle"] for r in await db.fetch("SELECT statement, lifecycle FROM claims")}
+    assert lifecycles["The Fire Temple boss respawns every 4 hours."] == "retracted"
+    assert lifecycles["Daily quests reward about 50000 kinah."] == "active"

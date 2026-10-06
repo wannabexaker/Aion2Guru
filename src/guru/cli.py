@@ -69,6 +69,56 @@ async def _audit(args: argparse.Namespace) -> int:
     return 0
 
 
+async def _doctor() -> int:
+    from guru.services.doctor import run_checks
+
+    checks = await run_checks(load_settings())
+    for c in checks:
+        print(c.line())
+    return 1 if any(c.status == "fail" for c in checks) else 0
+
+
+async def _eval(args: argparse.Namespace) -> int:
+    import json
+    from pathlib import Path
+
+    import yaml
+
+    from guru.db import create_database
+    from guru.llm.client import build_llm_client
+    from guru.llm.embeddings import build_embedder
+    from guru.services.evaluation import eval_extraction, eval_queries
+    from guru.services.faq_service import FaqService
+    from guru.services.profiles import ProfileRegistry
+    from guru.services.query_service import QueryService
+
+    settings = load_settings()
+    data = yaml.safe_load(await asyncio.to_thread(Path(args.file).read_text, encoding="utf-8"))
+    db = await create_database(settings.database_url.get_secret_value(), migrate=False)
+    try:
+        registry = ProfileRegistry(db)
+        await registry.reload()
+        state = registry.by_slug(args.profile)
+        if state is None:
+            print(f"unknown profile {args.profile!r}")
+            return 2
+        llm = build_llm_client(settings)
+        if args.eval_cmd == "extraction":
+            report = await eval_extraction(state, llm, data["cases"])
+        else:
+            qs = QueryService(
+                db, embedder=build_embedder(settings.embeddings), llm=llm, faq=FaqService(db, registry, llm)
+            )
+            report = await eval_queries(state, qs, data["questions"])
+        details = report.pop("details")
+        print(json.dumps(report, ensure_ascii=False, indent=2, default=str))
+        if args.verbose:
+            print(json.dumps(details, ensure_ascii=False, indent=2, default=str))
+    finally:
+        await db.close()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="guru")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -98,6 +148,16 @@ def build_parser() -> argparse.ArgumentParser:
     jobs = sub.add_parser("jobs", help="job queue status")
     jobs.add_argument("--retry", type=int, default=None, help="re-queue a dead job id")
 
+    sub.add_parser("doctor", help="check DB, Discord, Ollama, embeddings, SearxNG and profile setup")
+
+    ev = sub.add_parser("eval", help="measure extraction/answers with the configured models")
+    ev_sub = ev.add_subparsers(dest="eval_cmd", required=True)
+    for name in ("extraction", "queries"):
+        e2 = ev_sub.add_parser(name)
+        e2.add_argument("file")
+        e2.add_argument("--profile", default="aion2")
+        e2.add_argument("--verbose", action="store_true")
+
     au = sub.add_parser("audit", help="audit log")
     au.add_argument("--verify", action="store_true", help="verify the hash chain")
     au.add_argument("--limit", type=int, default=30)
@@ -120,6 +180,10 @@ def main(argv: list[str] | None = None) -> int:
         return _run(_jobs(args))
     if args.cmd == "audit":
         return _run(_audit(args))
+    if args.cmd == "doctor":
+        return _run(_doctor())
+    if args.cmd == "eval":
+        return _run(_eval(args))
     return 1
 
 
