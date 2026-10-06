@@ -1,0 +1,38 @@
+# Single host: Postgres + guru. Ollama runs on the host (already installed) → host.docker.internal.
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: guru
+      POSTGRES_USER: guru
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U guru -d guru"]
+      interval: 5s
+      retries: 10
+    # Not published to the host network on purpose.
+
+  guru:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      GURU_CONFIG: /app/guru.yaml
+    volumes:
+      - ./guru.yaml:/app/guru.yaml:ro
+      - ./profiles:/app/profiles:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "127.0.0.1:8080:8080"   # health/metrics only on localhost
+    read_only: true
+    tmpfs: [/tmp]
+
+volumes:
+  pgdata:

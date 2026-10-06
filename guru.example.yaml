@@ -1,0 +1,36 @@
+# Global settings (copy to guru.yaml). Profile settings live in the database (/settings, guru config apply).
+log_level: INFO
+log_json: true
+
+# Discord user ids with full access during initial setup (break-glass). Remove after configuring roles.
+owner_ids: []
+# Sync slash commands only to these guilds (instant). Empty = global (can take up to 1h).
+guild_ids: []
+
+api:
+  host: 0.0.0.0        # inside the container; publish only to 127.0.0.1 on the host
+  port: 8080
+
+worker:
+  concurrency: 2
+  lease_seconds: 300
+  poll_seconds: 5
+
+llm_providers:
+  local:
+    type: ollama
+    base_url: http://host.docker.internal:11434
+
+# Model per task. Pick by `guru eval` results, not by reputation.
+llm_tasks:
+  extract:     { provider: local, model: "gpt-oss:20b", temperature: 0, max_tokens: 700, timeout_s: 120 }
+  equivalence: { provider: local, model: "gpt-oss:20b", temperature: 0, max_tokens: 30,  timeout_s: 30 }
+  classify:    { provider: local, model: "gpt-oss:20b", temperature: 0, max_tokens: 30,  timeout_s: 30 }
+  answer:      { provider: local, model: "gpt-oss:20b", temperature: 0.2, max_tokens: 400, timeout_s: 60 }
+  faq_draft:   { provider: local, model: "gpt-oss:20b", temperature: 0.2, max_tokens: 400, timeout_s: 90 }
+
+embeddings:
+  provider: ollama
+  base_url: http://host.docker.internal:11434
+  model: bge-m3
+  dims: 1024

@@ -1,0 +1,67 @@
+[project]
+name = "guru"
+version = "0.1.0"
+description = "Discord AI knowledge system: the database is the memory, the LLM is the interpreter."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "asyncpg>=0.30",
+  "pgvector>=0.3",
+  "discord.py>=2.4",
+  "fastapi>=0.115",
+  "uvicorn>=0.32",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "pyyaml>=6.0",
+  "structlog>=24.4",
+  "prometheus-client>=0.21",
+  "httpx>=0.28",
+  "google-re2>=1.1",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "hypothesis>=6.120",
+  "ruff>=0.8",
+  "mypy>=1.13",
+  "types-pyyaml",
+]
+
+[project.scripts]
+guru = "guru.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/guru"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+markers = ["db: needs GURU_TEST_DATABASE_URL (real PostgreSQL + pgvector)"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "ASYNC", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003", "SIM905"]  # Greek text intentional; word lists via str.split are clearer
+
+[tool.mypy]
+python_version = "3.12"
+packages = ["guru"]
+mypy_path = "src"
+strict = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["asyncpg.*", "pgvector.*", "re2", "discord.*"]
+ignore_missing_imports = true
