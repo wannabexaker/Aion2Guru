@@ -67,6 +67,8 @@ M4 και M5 μπορούν να τρέξουν παράλληλα μετά το
 | Q-02 | FTS retriever + **πλήρες filter set** (profile, lifecycle, min_state, origins, visibility, applicability, category) | K-01, C-05 | M | SQL tests για κάθε filter· EXPLAIN χρησιμοποιεί indexes |
 | Q-10 | Visibility: allowed restricted channels ανά asker (`permissions_for`), visibility class για cache | Q-02, DS-01 | S | Leakage tests πράσινα |
 | Q-03 | Extractive composer + `/ask` + mention handler → **M1 demo** | Q-01, Q-02, Q-10, DS-03 | M | E2E στο staging: add → ask → απάντηση με provenance |
+| AC-01 | Access enforcement (D-26): έλεγχος `kb.query` πριν από οτιδήποτε· unauthorized mention/home-channel μήνυμα → delete/ignore/notice· metric + audit | DS-01, C-04 | S | Unauthorized → 0 DB/LLM δουλειά, μήνυμα σβήνεται |
+| RL-01 | Rate limits (D-28): per-user sliding windows, role overrides, LLM quota, `usage_counters` | Q-01, C-04 | S | Unit + integration tests· υπέρβαση → αυτοδιαγραφόμενη απάντηση |
 
 ## M2 — Discord ingestion + AI extraction
 
@@ -84,6 +86,8 @@ M4 και M5 μπορούν να τρέξουν παράλληλα μετά το
 | I-04 | Edit/delete/bulk/thread sync, purge policy, evidence deactivation, recompute | I-02, K-02 | M | Delete → content purged, claims recomputed (tests) |
 | I-05 | Startup backfill (cursors) + periodic evidence recheck | I-04 | M | Simulated downtime test |
 | I-06 | Retention jobs + `/kb forget-me` | I-04 | S | Expired rows καθαρίζονται· forget-me end-to-end test |
+| MR-01 | Moderator review channel (D-27): «Κρατάμε;» για νέα claims (Keep/Reject/Edit) + rating απαντήσεων (👍/👎/➕/✏️), quorum config, labels αποθηκεύονται | I-03, DS-03, C-04 | M | Κάθε απόφαση → state change + label + audit |
+| MR-02 | Learned gate (D-27): logistic regression ανά τύπο απόφασης, held-out precision, auto mode με threshold, αβέβαια → review | MR-01, A-03 | M | Auto mode ενεργοποιείται μόνο πάνω από threshold (tests με synthetic labels) |
 
 ## M3 — Full query pipeline
 

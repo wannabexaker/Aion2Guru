@@ -1,6 +1,6 @@
-# Guru — Discord AI Knowledge System · Design v0.1 (DRAFT)
+# Guru — Discord AI Knowledge System · Design v0.2
 
-> **Κατάσταση:** προς έγκριση. Καμία υλοποίηση πριν κλειδώσουν οι αποφάσεις του [DECISIONS.md](DECISIONS.md).
+> **Κατάσταση:** εγκρίθηκε με αλλαγές — βλ. [§20 Αλλαγές v0.2](#20-αλλαγές-v02-μετά-τις-αποφάσεις) και [DECISIONS.md](DECISIONS.md).
 > **Συνοδευτικά:** [schema.sql](schema.sql) (DDL draft) · [profile.aion2.example.yaml](profile.aion2.example.yaml) · [BACKLOG.md](BACKLOG.md)
 > **Ονοματολογία:** `guru` = generic core. Το AION 2 είναι *profile* (config + reference data), όχι κώδικας.
 
@@ -1024,7 +1024,7 @@ Queries ανά `answered_by` · latency histograms ανά stage · LLM tokens/la
 |---------|-------|----------|------|
 | Unit (core) | Parser, normalizer, alias matcher, prefilter, scoring, **state machine**, conflict rules, ranking, grounding checker, validators | pytest, **hypothesis** (invariants: «retracted ποτέ σε απάντηση», «verified ⇒ basis», «restricted evidence ⇒ ποτέ σε μη εξουσιοδοτημένο») | CI |
 | Contract | Κάθε port: fake vs real adapter στα ίδια tests | pytest | CI |
-| Integration | Repositories, migrations up/down, queue concurrency (`SKIP LOCKED`), retrieval SQL filters, recompute consistency | **testcontainers** (Postgres + pgvector) — όχι mocks για SQL | CI |
+| Integration | Repositories, migrations up/down, queue concurrency (`SKIP LOCKED`), retrieval SQL filters, recompute consistency | Πραγματικό Postgres + pgvector μέσω `GURU_TEST_DATABASE_URL` (CI: service container `pgvector/pgvector:pg16`) — όχι mocks για SQL | CI |
 | Discord adapter | Fake events/interactions, renderer snapshots (embed JSON) | pytest | CI |
 | Web | Recorded HTTP fixtures, SSRF suite, robots, date extraction corpus | respx | CI |
 | LLM pipeline | FakeLLM με recorded outputs (deterministic) | pytest | CI |
@@ -1079,5 +1079,22 @@ Queries ανά `answered_by` · latency histograms ανά stage · LLM tokens/la
 | Redis / distributed workers | Μόνο με τα κριτήρια του §13 |
 
 ---
+
+---
+
+## 20. Αλλαγές v0.2 (μετά τις αποφάσεις)
+
+| Θέμα | Αλλαγή |
+|------|--------|
+| Triggers (D-05) | Channel role **`home`**: το bot διαβάζει όλα τα μηνύματα εκεί (passive ingestion) και απαντά μόνο σε mention. **Mention οπουδήποτε** = query. Δεν υπάρχει passive ingestion σε άλλα channels. |
+| Access (D-26) | Χρήστης χωρίς capability `kb.query` που κάνει mention ή γράφει στο home channel → **διαγραφή μηνύματος** (configurable `delete/ignore/notice`), metric + audit. Καμία LLM/DB δουλειά πριν από τον έλεγχο. |
+| Moderator review (D-27) | Mod channel: (α) **«Κρατάμε αυτή την πληροφορία;»** για νέα claims (Keep / Reject / Edit), (β) **rating απαντήσεων** (👍 / 👎 / ➕ Add to KB / ✏️ Correct). Ψηφίζει οποιοσδήποτε moderator· πρώτη απόφαση κλείνει το task (ή quorum από config). |
+| Learned automation (D-27) | Κάθε απόφαση moderator = label `(features, embedding) → keep/reject`. Logistic regression ανά τύπο απόφασης. **Auto mode** ενεργοποιείται ανά τύπο μόνο όταν precision σε held-out labels ≥ `auto_threshold` (π.χ. 0.95, ≥200 labels)· μόνο οι αβέβαιες περιπτώσεις πάνε σε review. Deterministic metrics αποφασίζουν, όχι το LLM. |
+| Delete (D-06) | `on_source_delete: keep_knowledge`: evidence/quote μένουν, observation `deleted`. Άσχετο περιεχόμενο δεν αποθηκεύεται ποτέ. |
+| Rate limits (D-28) | Per-user sliding window (minute/hour/day), overrides ανά ρόλο, ξεχωριστό όριο για απαντήσεις LLM. Minute: in-process· day: `usage_counters` στη DB. Υπέρβαση → σύντομη απάντηση που αυτοδιαγράφεται. |
+| LLM (D-02) | Ollama local (native `/api/chat` με JSON Schema `format`) + OpenAI-compatible adapter· μοντέλο ανά task στο `guru.yaml`. |
+| Πηγές (D-11) | Source discovery (SearxNG) + source reputation στο MVP (W-07, W-08). |
+| Γλώσσες (D-03) | en + el + Greeklish· απάντηση στη γραφή της ερώτησης. |
+| Region (D-04) | `GLOBAL` default· άλλα regions με ετικέτα, χαμηλότερο ranking. |
 
 Backlog: **[BACKLOG.md](BACKLOG.md)** · Αποφάσεις/ρίσκα: **[DECISIONS.md](DECISIONS.md)**

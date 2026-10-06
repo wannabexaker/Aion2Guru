@@ -14,6 +14,12 @@
 | D-11 | Δεν υπάρχει λίστα πηγών: το σύστημα **ανακαλύπτει** πηγές, τις συγκρίνει και **προσαρμόζει την αξιοπιστία** τους. Η γνώση της ομάδας στο Discord = αξιόπιστη αναφορά | Μπαίνουν στο MVP: search provider (SearxNG self-hosted) + source discovery + **source reputation** (στατιστική συμφωνίας με verified γνώση, όχι AI). Tier 4 μόνο χειροκίνητα. Team role = trusted |
 | D-12 | Config στη DB, versioned, YAML import/export | Όπως στο design |
 | D-20 | Ρόλοι/trust/ποιους ακούει/σε ποιους απαντά: **ρυθμίσεις μέσα στο bot**, όχι hardcoded | `/settings` panel στο Discord με role/channel selectors· bootstrap μόνο για server Administrator |
+| D-02 | **Local μόνο**: Ollama (υπάρχει ήδη, Hermes κ.ά.). Μοντέλο ανά task από config | Native Ollama adapter (`/api/chat` με `format`=JSON Schema) + OpenAI-compatible adapter |
+| D-05 | **Home channel:** το bot διαβάζει **όλα** τα μηνύματα στο δικό του channel. **Mention οπουδήποτε** → διαβάζει & απαντά. Τίποτα άλλο | Channel role `home` (= watch + ask)· passive ingestion μόνο από home channel· mentions = query path |
+| D-26 | **Access enforcement:** χρήστης χωρίς ρόλο πρόσβασης που κάνει mention ή γράφει στο home channel → το μήνυμα **διαγράφεται** | Setting `access.unauthorized_action: delete | ignore | notice` (default delete)· απαιτεί Manage Messages· audit/metric |
+| D-27 | **Moderator review & rating:** mod channel όπου το bot ρωτά «κρατάμε αυτή την πληροφορία;» και βαθμολογούνται οι απαντήσεις του (buttons/emoji). Απαντά όλη η ομάδα moderators | `review_tasks` + buttons (Keep/Reject/Edit, 👍/👎/➕ Add to KB). Οι αποφάσεις = **labels** → learned gate. **Auto mode** ανά τύπο απόφασης ενεργοποιείται μόνο όταν η μετρημένη ακρίβεια σε labels ≥ threshold· αβέβαια πάντα σε review (active learning) |
+| D-06 | **Διαγραφή μηνύματος:** αν έχει δώσει έγκυρη γνώση, η γνώση **μένει**. Άσχετο περιεχόμενο δεν αποθηκεύεται ποτέ | `retention.on_source_delete: keep_knowledge` (evidence & quote μένουν, observation σημαίνεται deleted)· `/kb forget-me` παραμένει για GDPR αιτήματα |
+| D-28 | **Rate limits ανά χρήστη** | Per-user limits (minute/hour/day) με overrides ανά ρόλο από `/settings`· ξεχωριστό όριο για LLM απαντήσεις· daily counters στη DB |
 
 ## 1. Αποφάσεις
 
