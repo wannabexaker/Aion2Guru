@@ -1,0 +1,290 @@
+# =============================================================================
+# Guru profile config — ΠΑΡΑΔΕΙΓΜΑ (design artifact)
+# Όλα τα IDs/URLs είναι placeholders. Οι κατηγορίες/entities είναι ενδεικτικές
+# και πρέπει να επικυρωθούν (DECISIONS: D-03, D-04, D-11, D-20).
+# Validation: Pydantic schema v1 + semantic checks πριν από apply.
+# =============================================================================
+schema_version: 1
+
+profile:
+  slug: aion2
+  name: "AION 2"
+  guild_id: 000000000000000000            # D-15
+  description: >
+    MMORPG AION 2: classes, skills, dungeons, bosses, items, crafting,
+    economy, events, patches.
+  languages:
+    canonical: en                         # γλώσσα αποθήκευσης claims (D-03)
+    accepted: [el, en]                    # γλώσσες ερωτήσεων
+    answer: match_question                # match_question | canonical | <lang>
+    greeklish: true                       # επιπλέον aliases/normalization (D-03)
+  keywords: [aion, aion2, "aion 2", ncsoft, daeva, abyss, elyos, asmodian]
+
+# --- Applicability dimensions (γενίκευση του "version relevance") ------------
+dimensions:
+  game_version:
+    type: ordered
+    infer_from_date: true                 # date → version από το timeline
+    patterns:                             # RE2· explicit αναφορά υπερισχύει
+      - '(?i)\b(?:v|patch\s*)(\d+\.\d+(?:\.\d+)?)\b'
+    values:
+      - { value: "1.0", valid_from: "2025-11-19", scope: { region: KR } }   # placeholder
+  region:
+    type: enum
+    values: [KR, TW, GLOBAL]
+    default: [KR, TW]                     # D-04
+
+# --- Discord channels ---------------------------------------------------------
+channels:
+  - channel_id: 100000000000000001
+    role: watch
+    default_category: general
+    audience: public
+    ingest: { mode: hybrid, min_author_tier: 2, include_threads: true }
+  - channel_id: 100000000000000002        # forum/guides channel = high signal
+    role: watch
+    default_category: guides
+    audience: public
+    ingest: { mode: hybrid, min_author_tier: 1, include_threads: true, signal_bonus: 1 }
+  - channel_id: 100000000000000003        # officers — restricted (D-14)
+    role: watch
+    audience: restricted
+    ingest: { mode: explicit_only }
+  - { channel_id: 100000000000000004, role: ask }
+  - { channel_id: 100000000000000005, role: faq_publish }      # forum channel (D-09)
+  - { channel_id: 100000000000000006, role: faq_review }
+  - { channel_id: 100000000000000007, role: admin_log }
+
+# --- Knowledge categories (ιεραρχικές, επεκτάσιμες) --------------------------
+categories:
+  - key: general
+    name: General
+    settings: { half_life_days: 90 }
+  - key: classes
+    name: Classes & Builds
+    keywords: [class, build, skill, stigma, rotation, "κλάση", "μπιλντ"]
+    settings: { half_life_days: 60, volatile_on_version: true, faq_eligible: true }
+    children:
+      - key: skills
+        name: Skills
+        keywords: [skill, cooldown, "cd"]
+        settings: { half_life_days: 45, volatile_on_version: true }
+  - key: content
+    name: Dungeons & Bosses
+    keywords: [dungeon, instance, raid, boss, respawn, "μπος"]
+    settings: { half_life_days: 60, volatile_on_version: true, faq_eligible: true }
+  - key: items
+    name: Items, Gear & Enchanting
+    keywords: [item, gear, enchant, drop, "ντροπ", "αντικείμενο"]
+    settings: { half_life_days: 60, volatile_on_version: true, faq_eligible: true }
+  - key: economy
+    name: Crafting & Economy
+    keywords: [craft, gather, market, kinah, price]
+    settings: { half_life_days: 14, volatile_on_version: true }
+  - key: events
+    name: Events
+    keywords: [event, reward, login]
+    settings: { half_life_days: 10 }
+  - key: patches
+    name: Patch Notes & Updates
+    keywords: [patch, update, maintenance, hotfix]
+    settings: { half_life_days: 30 }
+  - key: guides
+    name: Guides & How-to
+    settings: { half_life_days: 90, faq_eligible: true }
+  - key: lore
+    name: Lore
+    settings: { half_life_days: null }   # δεν "παλιώνει"
+
+# --- Structured schema (generic EAV με JSON Schema ανά attribute) -------------
+entity_types:
+  - key: class
+    name: Class
+    default_category: classes
+    attributes:
+      role:      { schema: { type: string, enum: [tank, melee_dps, ranged_dps, healer, support] }, label: { en: Role, el: Ρόλος } }
+  - key: boss
+    name: Boss
+    default_category: content
+    attributes:
+      location:  { schema: { type: string }, label: { en: Location, el: Τοποθεσία } }
+      level:     { schema: { type: integer, minimum: 1 }, label: { en: Level, el: Επίπεδο } }
+      respawn:   { schema: { type: string, pattern: '^\d+[mhd]$' }, label: { en: Respawn, el: Respawn } }
+      drops:     { schema: { type: array, items: { type: entity_ref, entity_type: item } }, label: { en: Drops, el: Drops } }
+  - key: item
+    name: Item
+    default_category: items
+    attributes:
+      slot:      { schema: { type: string } }
+      grade:     { schema: { type: string } }
+      obtained_from: { schema: { type: array, items: { type: entity_ref } } }
+  - key: dungeon
+    name: Dungeon
+    default_category: content
+    attributes:
+      min_level:   { schema: { type: integer } }
+      entry_limit: { schema: { type: string } }
+
+# Τα entities (χιλιάδες) ΔΕΝ μπαίνουν εδώ — reference data import (CSV/YAML).
+# Παράδειγμα γραμμής import:  item,"<canonical name>","alias1|alias2|ελληνικό alias"
+
+# --- Intents (deterministic routing πρώτα) ------------------------------------
+intents:
+  - key: boss_respawn
+    description: Πότε κάνει respawn ένα boss
+    target: { entity_type: boss, attribute: respawn, answer_mode: structured }
+    patterns: ['(?i)\b(respawn|spawn|εμφανίζεται|βγαίνει)\b']
+    examples: ["when does the boss respawn", "κάθε πόσο βγαίνει ο boss"]
+  - key: item_source
+    description: Από πού βγαίνει ένα item
+    target: { entity_type: item, attribute: obtained_from, answer_mode: structured }
+    patterns: ['(?i)\b(drop|drops|where.*get|πού.*(βρίσκω|πέφτει|βγαίνει))\b']
+    examples: ["where does this item drop", "πού πέφτει αυτό το item"]
+  - key: how_to
+    description: Οδηγίες / διαδικασία
+    target: { category: guides, answer_mode: auto }
+    patterns: ['(?i)\b(how to|how do i|πώς)\b']
+    examples: ["how do I enchant gear", "πώς κάνω craft"]
+
+# --- Internet sources & trust -------------------------------------------------
+sources:
+  - key: official_news                    # D-11
+    kind: web_feed
+    locator: "<OFFICIAL_NEWS_FEED_URL>"
+    independence_group: "org:ncsoft"
+    trust_tier: 4
+    schedule_seconds: 3600
+  - key: official_patch_notes
+    kind: web_page
+    locator: "<OFFICIAL_PATCH_NOTES_URL>"
+    independence_group: "org:ncsoft"
+    trust_tier: 4
+    schedule_seconds: 3600
+    fetch_config: { follow_links: { pattern: '<PATCH_NOTE_URL_RE2>', max: 20 } }
+  - key: community_wiki
+    kind: web_sitemap
+    locator: "<WIKI_SITEMAP_URL>"
+    independence_group: "site:<wiki-domain>"
+    trust_tier: 2
+    schedule_seconds: 86400
+
+domain_trust:                             # για δυναμικά URLs (/kb ingest-url, P2 search)
+  - { pattern: "<official-domain>", tier: 4, group: "org:ncsoft" }
+  - { pattern: "*", tier: 1 }
+domain_deny: []
+
+trust:
+  tier_weights: { 0: 0.0, 1: 0.25, 2: 0.5, 3: 0.8, 4: 1.0 }
+  default_member_tier: 2
+  new_account_days: 14                    # νεότεροι λογαριασμοί → tier 1 στο passive
+  roles:
+    "<ROLE_ID_MODERATOR>": 3
+    "<ROLE_ID_VETERAN>": 3
+  webhooks:
+    "<OFFICIAL_ANNOUNCEMENT_WEBHOOK_ID>": 4   # followed announcement channel (D-21)
+  community_cap: 1.2                      # max συνολική συνεισφορά ομάδων tier ≤2
+  freshness_floor: 0.2
+  version_mismatch_factor: 0.4
+  unverified_quote_factor: 0.5
+  verification_policy:
+    auto_verify_official: true
+    auto_verify_corroboration: { enabled: false, min_groups: 3, min_tier: 3 }
+    corroborated: { min_groups: 2, min_tier: 2 }
+
+# --- Permissions --------------------------------------------------------------
+permissions:
+  - { capability: kb.query,            roles: ["@everyone"] }
+  - { capability: kb.ingest,           roles: ["<ROLE_ID_MODERATOR>", "<ROLE_ID_VETERAN>"] }
+  - { capability: kb.verify,           roles: ["<ROLE_ID_MODERATOR>"] }
+  - { capability: kb.edit,             roles: ["<ROLE_ID_MODERATOR>"] }
+  - { capability: kb.conflict.resolve, roles: ["<ROLE_ID_MODERATOR>"] }
+  - { capability: faq.approve,         roles: ["<ROLE_ID_MODERATOR>"] }
+  - { capability: faq.manage,          roles: ["<ROLE_ID_ADMIN>"] }
+  - { capability: rules.manage,        roles: ["<ROLE_ID_ADMIN>"] }
+  - { capability: sources.manage,      roles: ["<ROLE_ID_ADMIN>"] }
+  - { capability: config.manage,       roles: ["<ROLE_ID_ADMIN>"] }
+  - { capability: audit.read,          roles: ["<ROLE_ID_ADMIN>"] }
+  - { capability: perm.manage,         users: ["<OWNER_USER_ID>"] }
+
+# --- Ingestion ----------------------------------------------------------------
+ingestion:
+  prefilter:
+    min_chars: 25
+    max_chars: 4000
+    threshold: 2
+    weights:
+      entity_alias_hit: 2
+      keyword_hit: 1
+      number_or_unit: 1
+      allowlisted_url: 1
+      reply_to_question: 1
+      author_tier_ge_3: 2
+  window: { idle_seconds: 300, max_messages: 30, max_tokens: 1500, context_before: 5 }
+  capture:
+    reaction_emoji: "📌"
+    reaction_min_tier: 3
+  allowed_claim_types: [fact, tip, procedure]
+  quote_min_ratio: 0.9
+
+# --- Search & answer ----------------------------------------------------------
+search:
+  default_scope: all
+  default_min_state: unverified           # D-07
+  relevance: { accept: 0.55, reject: 0.35 }   # βαθμονόμηση στο eval set
+  category_filter: soft                   # hard μόνο όταν το δίνει ο χρήστης
+  hybrid: fallback                        # fallback | always
+  fts_k: 20
+  vector_k: 20
+  rrf_k: 60
+  state_factors: { verified: 1.0, corroborated: 0.85, disputed: 0.75, unverified: 0.6 }
+  dedupe: { tau_high: 0.92, tau_low: 0.80 }
+  faq_match_threshold: 0.85
+
+answer:
+  llm_synthesis: auto                     # auto | always | never
+  allow_cross_language_extractive: false
+  max_context_records: 6
+  max_context_tokens: 1800
+  max_answer_tokens: 350
+  dominance_ratio: 1.6                    # top1/top2 για extractive
+  show_record_ids: true
+
+scope_tokens:                             # mention syntax (D-17)
+  faq:      [faq, συχνές]
+  verified: [verified, επιβεβαιωμένα]
+  internal: [internal, kb, εσωτερικά]
+  web:      [web, internet]
+  all:      [all, όλα]
+
+# --- FAQ ----------------------------------------------------------------------
+faq:
+  publish_channel: 100000000000000005
+  review_channel: 100000000000000006
+  format: forum                           # forum | text
+  tags_from: top_level_categories
+  candidates:
+    on_verified: true
+    popularity: { min_queries: 5, window_days: 14 }
+  require_four_eyes: false
+  auto_publish: { enabled: false }        # X1
+  on_deprecate: mark                      # mark | delete
+  on_disputed: banner                     # banner | deprecate | none
+
+# --- Prompts (slots· οι core κανόνες ασφαλείας ΔΕΝ γίνονται override) ---------
+prompts:
+  persona: >
+    Είσαι βοηθός γνώσης για το AION 2. Απαντάς σύντομα και μόνο από τα records που σου δίνονται.
+  answer_style: >
+    Μέχρι 120 λέξεις. Bullet points όταν υπάρχουν βήματα. Αναφέρεις version/region όταν δίνεται.
+  extraction_guidelines: >
+    Κράτα μόνο επαληθεύσιμα γεγονότα για το παιχνίδι (μηχανισμοί, αριθμοί, τοποθεσίες, drops,
+    διαδικασίες). Αγνόησε απόψεις, αστεία, φήμες χωρίς πηγή, ερωτήσεις.
+  faq_style: >
+    Ερώτηση όπως θα τη ρωτούσε παίκτης. Απάντηση αυτοτελής, ≤ 80 λέξεις.
+
+# --- Retention ----------------------------------------------------------------
+retention:
+  context_only_days: 14
+  unlinked_candidate_days: 60
+  query_log_days: 30
+  purge_on_delete: true
