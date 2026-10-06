@@ -110,3 +110,43 @@ class FeedbackButton(discord.ui.DynamicItem[discord.ui.Button[discord.ui.View]],
         style = "el" if (interaction.locale and str(interaction.locale).startswith("el")) else "en"
         text = tr("feedback.thanks", style) if ok else "—"
         await interaction.response.send_message(text, ephemeral=True)
+
+
+class ReviewButton(
+    discord.ui.DynamicItem[discord.ui.Button[discord.ui.View]],
+    template=r"guru:rv:(?P<task>\d+):(?P<d>keep|reject|edit|good|bad)",
+):
+    """Moderator review buttons (D-27). Persistent; any moderator may vote; quorum from config."""
+
+    def __init__(self, task_id: int, decision: str) -> None:
+        super().__init__(discord.ui.Button(custom_id=f"guru:rv:{task_id}:{decision}"))
+        self.task_id = task_id
+        self.decision = decision
+
+    @classmethod
+    async def from_custom_id(
+        cls, interaction: discord.Interaction, item: discord.ui.Item[Any], match: re.Match[str]
+    ) -> ReviewButton:
+        return cls(int(match["task"]), match["d"])
+
+    async def callback(self, interaction: discord.Interaction) -> None:
+        bot: GuruBot = interaction.client  # type: ignore[assignment]
+        await bot.handle_review_click(interaction, self.task_id, self.decision)
+
+
+class EditStatementModal(discord.ui.Modal, title="Edit statement"):
+    def __init__(self, bot: GuruBot, task_id: int, current: str) -> None:
+        super().__init__(timeout=600)
+        self.bot = bot
+        self.task_id = task_id
+        self.statement: discord.ui.TextInput[EditStatementModal] = discord.ui.TextInput(
+            label="Statement",
+            style=discord.TextStyle.paragraph,
+            default=current[:1000],
+            max_length=400,
+            min_length=10,
+        )
+        self.add_item(self.statement)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await self.bot.handle_review_click(interaction, self.task_id, "edit", str(self.statement.value).strip())

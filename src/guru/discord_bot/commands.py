@@ -217,6 +217,19 @@ def register_commands(bot: GuruBot) -> None:
 
     tree.add_command(kb)
 
+    # ---------------------------------------------------------------- context menu (explicit capture)
+    async def add_to_knowledge(interaction: discord.Interaction, message: discord.Message) -> None:
+        ctx = Ctx(bot, interaction)
+        state = ctx.require("kb.ingest")
+        if not message.content.strip():
+            raise ValueError("the message has no text")
+        if not isinstance(interaction.user, discord.Member):
+            raise PermissionDenied("kb.ingest")
+        await bot.capture_message(state, interaction.user, message, "context_menu")
+        await respond_text(interaction, tr("capture.ok", ctx.style))
+
+    tree.add_command(app_commands.ContextMenu(name="Add to knowledge", callback=add_to_knowledge))
+
     # ---------------------------------------------------------------- /setup
     @tree.command(name="setup", description="Create the bot profile for this server from a template")
     @app_commands.guild_only()
@@ -315,6 +328,33 @@ def register_commands(bot: GuruBot) -> None:
         async with bot.rt.db.connection() as conn:
             rows = await queue.stats(conn)
         lines = [f"`{r['kind']}` {r['status']}: {r['n']}" for r in rows] or ["queue empty"]
+        await respond_text(interaction, "\n".join(lines)[:1990])
+
+    @admin.command(name="learning", description="Moderator labels and learned automation status")
+    async def learning_cmd(interaction: discord.Interaction) -> None:
+        ctx = Ctx(bot, interaction)
+        state = ctx.require("audit.read")
+        rows = await bot.rt.db.fetch(
+            """SELECT decision_kind, source, label, count(*) AS n FROM decision_labels WHERE profile_id = $1
+                GROUP BY 1, 2, 3 ORDER BY 1, 2, 3""",
+            state.profile_id,
+        )
+        gate = await bot.rt.db.fetchrow(
+            """SELECT n_labels, auto_enabled, metrics, trained_at FROM learned_gates
+                WHERE profile_id = $1 AND decision_kind = 'claim_keep' AND active""",
+            state.profile_id,
+        )
+        lines = [f"`{r['decision_kind']}` {r['source']} label={r['label']}: {r['n']}" for r in rows] or ["no labels"]
+        auto_cfg = state.config.review.claim_keep.auto
+        lines.append(
+            f"auto (config): {'on' if auto_cfg.enabled else 'off'} · target precision {auto_cfg.threshold}"
+            f" · min labels {auto_cfg.min_labels}"
+        )
+        if gate is not None:
+            lines.append(
+                f"gate: trained {gate['trained_at']:%Y-%m-%d %H:%M} on {gate['n_labels']} labels · "
+                f"auto {'ENABLED' if gate['auto_enabled'] else 'not yet safe'} · {gate['metrics']}"
+            )
         await respond_text(interaction, "\n".join(lines)[:1990])
 
     tree.add_command(admin)

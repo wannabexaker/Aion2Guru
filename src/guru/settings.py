@@ -30,6 +30,10 @@ class LLMTaskSettings(BaseModel):
     temperature: float = 0.0
     max_tokens: int = 512
     timeout_s: float = 60.0
+    seed: int | None = 42
+    # Ollama reasoning control: None = model default, False = off, "low"/"medium"/"high" for gpt-oss.
+    think: bool | Literal["low", "medium", "high"] | None = None
+    num_ctx: int | None = 8192
 
 
 class EmbeddingSettings(BaseModel):
@@ -37,6 +41,11 @@ class EmbeddingSettings(BaseModel):
     base_url: str = "http://127.0.0.1:11434"
     model: str = ""
     dims: int = 0
+    # Some models (e5) need role prefixes; bge-m3 does not.
+    query_prefix: str = ""
+    document_prefix: str = ""
+    batch_size: int = 32
+    timeout_s: float = 60.0
 
 
 class ApiSettings(BaseModel):

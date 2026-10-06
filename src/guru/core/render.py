@@ -47,6 +47,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "notfound": "Not found.",
         "footer.record": "Record",
         "feedback.thanks": "Thanks for the feedback!",
+        "teach.ok": "📝 Noted — it will be processed and reviewed.",
+        "capture.ok": "📝 Added for processing (K-records appear after extraction).",
+        "review.keep_title": "🧾 Keep this information?",
+        "review.rate_title": "🗳️ Rate this answer",
+        "review.question": "Question",
+        "review.answer": "Answer",
+        "review.decided": "Decided: {decision} by {who}",
     },
     "el": {
         "state.verified": "Επιβεβαιωμένο",
@@ -78,6 +85,13 @@ STRINGS: dict[str, dict[str, str]] = {
         "notfound": "Δεν βρέθηκε.",
         "footer.record": "Καταχώρηση",
         "feedback.thanks": "Ευχαριστώ για το feedback!",
+        "teach.ok": "📝 Σημειώθηκε — θα επεξεργαστεί και θα ελεγχθεί.",
+        "capture.ok": "📝 Προστέθηκε για επεξεργασία.",
+        "review.keep_title": "🧾 Κρατάμε αυτή την πληροφορία;",
+        "review.rate_title": "🗳️ Βαθμολόγησε την απάντηση",
+        "review.question": "Ερώτηση",
+        "review.answer": "Απάντηση",
+        "review.decided": "Απόφαση: {decision} από {who}",
     },
 }
 
@@ -251,4 +265,75 @@ def render_claim(data: dict[str, Any], style: str) -> MessagePayload:
             footer=f"rev {c['rev']} · created {_date(c['created_at'])}",
         ),
         ephemeral=True,
+    )
+
+
+def render_review(task: dict[str, Any], style: str = "el") -> MessagePayload:
+    """Moderator review post (D-27). Buttons carry the task id (persistent across restarts)."""
+    p = task["payload"] or {}
+    tid = task["id"]
+    if task["kind"] == "claim_keep":
+        fields = [
+            EmbedField("Category", str(p.get("category") or "—"), inline=True),
+            EmbedField(
+                tr("field.status", style), status_line(p.get("verification", "unverified"), None, style), inline=True
+            ),
+        ]
+        lines = []
+        for q in p.get("quotes", []):
+            link = (
+                f"https://discord.com/channels/{q['guild_id']}/{q['channel_id']}/{q['message_id']}"
+                if q.get("message_id")
+                else None
+            )
+            who = f"<@{q['author_id']}>" if q.get("author_id") else ""
+            lines.append(
+                f"> {clip(q.get('quote', ''), 200)}\n{who} T{q.get('tier', '?')}" + (f" — <{link}>" if link else "")
+            )
+        if lines:
+            fields.append(EmbedField(tr("field.sources", style), clip("\n".join(lines), FIELD_LIMIT)))
+        return MessagePayload(
+            embed=EmbedData(
+                clip(str(p.get("statement", "")), DESC_LIMIT),
+                COLOR["unverified"],
+                title=tr("review.keep_title", style),
+                fields=fields,
+                footer=f"K-{task['target_id']} · task {tid}",
+            ),
+            buttons=[
+                ButtonData(f"guru:rv:{tid}:keep", "Keep", "✅", "success"),
+                ButtonData(f"guru:rv:{tid}:reject", "Reject", "❌", "danger"),
+                ButtonData(f"guru:rv:{tid}:edit", "Edit", "✏️", "secondary"),
+            ],
+        )
+    items = p.get("items", [])
+    answer = (
+        "\n".join(
+            f"• {BADGE.get(i.get('verification', ''), '')} {clip(i.get('statement', ''), 300)} `K-{i.get('claim_id')}`"
+            for i in items
+        )
+        or "—"
+    )
+    bot = p.get("bot_message") or {}
+    link = (
+        f"https://discord.com/channels/{bot['guild_id']}/{bot['channel_id']}/{bot['message_id']}"
+        if bot.get("message_id")
+        else None
+    )
+    fields = [
+        EmbedField(tr("review.question", style), clip(str(p.get("question", "")), FIELD_LIMIT)),
+        EmbedField(tr("review.answer", style), clip(answer, FIELD_LIMIT)),
+    ]
+    return MessagePayload(
+        embed=EmbedData(
+            f"<{link}>" if link else "",
+            COLOR["none"],
+            title=tr("review.rate_title", style),
+            fields=fields,
+            footer=f"{p.get('answered_by', '')} · task {tid}",
+        ),
+        buttons=[
+            ButtonData(f"guru:rv:{tid}:good", "Good", "👍", "success"),
+            ButtonData(f"guru:rv:{tid}:bad", "Bad", "👎", "danger"),
+        ],
     )

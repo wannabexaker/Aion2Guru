@@ -10,7 +10,9 @@ import re
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 
+from guru.core.ingest import teach_prefix
 from guru.core.permissions import Principal
 from guru.core.render import MessagePayload, render_answer, render_limited, tr
 from guru.core.text import detect_language
@@ -34,6 +36,7 @@ class IncomingMessage:
     mentions_bot: bool
     created_at: datetime
     reference_message_id: int | None = None
+    channel_restricted: bool = False  # channel not visible to @everyone
     # Restricted channels (of the answering profile) this author can view; computed by the adapter.
     visible_channels: Callable[[ProfileState], frozenset[int]] = lambda _s: frozenset()
 
@@ -83,6 +86,8 @@ class MessageRouter:
         salt: str,
         bot_user_id: int,
         on_home_message: HomeHandler | None = None,
+        ingest: Any = None,  # IngestService (teach-by-mention)
+        review: Any = None,  # ReviewService (answer rating)
     ) -> None:
         self.registry = registry
         self.queries = queries
@@ -90,6 +95,8 @@ class MessageRouter:
         self.salt = salt
         self.bot_user_id = bot_user_id
         self.on_home_message = on_home_message
+        self.ingest = ingest
+        self.review = review
 
     async def route(self, msg: IncomingMessage) -> RouteResult:
         if msg.guild_id is None:
@@ -116,6 +123,9 @@ class MessageRouter:
 
         text = strip_mentions(msg.content, self.bot_user_id)
         style = detect_language(text).style
+        taught = teach_prefix(text)
+        if taught is not None and self.ingest is not None:
+            return await self._teach(state, msg, taught, style)
         decision = await self.limiter.take_query(state, msg.author)
         if not decision.allowed:
             payload = render_limited(
@@ -138,11 +148,71 @@ class MessageRouter:
 
         async def on_sent(bot_message_id: int | None) -> None:
             try:
-                await self.queries.log(req, answer, user_hash=uh, bot_message_id=bot_message_id)
+                qid = await self.queries.log(req, answer, user_hash=uh, bot_message_id=bot_message_id)
+                if self.review is not None and answer.items:
+                    await self.review.rate_answer_task(
+                        state,
+                        qid,
+                        {
+                            "question": answer.question,
+                            "mode": answer.mode,
+                            "answered_by": answer.answered_by,
+                            "items": [
+                                {"claim_id": i.claim_id, "statement": i.statement, "verification": i.verification}
+                                for i in answer.items
+                            ],
+                            "bot_message": {
+                                "guild_id": msg.guild_id,
+                                "channel_id": msg.channel_id,
+                                "message_id": bot_message_id,
+                            },
+                        },
+                    )
             except Exception:
                 log.warning("query.log_failed", exc_info=True)
 
         return RouteResult([Reply(payload, on_sent)], reason=f"answered:{answer.mode}", answer=answer)
+
+    async def _teach(self, state: ProfileState, msg: IncomingMessage, text: str, style: str) -> RouteResult:
+        from guru.services.ingest_service import CapturedMessage
+        from guru.services.knowledge_service import PermissionDenied
+
+        notice = float(state.config.access.notice_seconds or 8)
+        if len(text) < 10:
+            return RouteResult(
+                [
+                    Reply(
+                        MessagePayload(
+                            content=tr("answer.empty", style, profile=state.config.profile.name), delete_after=notice
+                        )
+                    )
+                ],
+                reason="teach:empty",
+            )
+        captured = CapturedMessage(
+            message_id=msg.message_id,
+            guild_id=msg.guild_id or 0,
+            channel_id=msg.channel_id,
+            author_id=msg.author.user_id,
+            author_tier=state.resolver.trust_tier(msg.author),
+            content=text,
+            created_at=msg.created_at,
+            restricted=msg.channel_restricted,
+        )
+        try:
+            await self.ingest.capture_explicit(state, msg.author, captured, reason="teach")
+        except PermissionDenied as exc:
+            return RouteResult(
+                [
+                    Reply(
+                        MessagePayload(content=tr("perm.denied", style, capability=exc.capability), delete_after=notice)
+                    )
+                ],
+                reason="teach:denied",
+            )
+        return RouteResult(
+            [Reply(MessagePayload(content=tr("teach.ok", style), delete_after=notice * 2))], reason="teach:ok"
+        )
 
     def _deny(self, state: ProfileState, msg: IncomingMessage) -> RouteResult:
         action = state.config.access.unauthorized_action

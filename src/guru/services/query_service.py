@@ -376,17 +376,18 @@ class QueryService:
         user_hash: bytes,
         bot_message_id: int | None,
         answered_by: str | None = None,
-    ) -> None:
+    ) -> int:
         by = answered_by or answer.answered_by
         metrics.QUERIES.labels(answered_by=by).inc()
         metrics.QUERY_LATENCY.labels(answered_by=by).observe(answer.stage_ms.get("total", 0) / 1000)
         retention_days = req.state.config.retention.query_log_days
-        await self.db.execute(
+        return await self.db.fetchval(  # type: ignore[no-any-return]
             """INSERT INTO query_log (profile_id, guild_id, channel_id, user_hash, request_message_id,
                                       bot_message_id, query_text, query_norm_hash, lang, script, scope,
                                       route, answered_by, claim_ids, stage_ms, relevance, expires_at)
                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
-                       now() + make_interval(days => $17))""",
+                       now() + make_interval(days => $17))
+               RETURNING id""",
             req.state.profile_id,
             req.guild_id,
             req.channel_id,

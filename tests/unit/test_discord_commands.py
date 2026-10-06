@@ -16,10 +16,11 @@ def test_command_tree_serializes() -> None:
     bot = GuruBot(rt)  # type: ignore[arg-type]
     register_commands(bot)
     payloads = {c.name: c.to_dict(bot.tree) for c in bot.tree.get_commands()}
-    assert set(payloads) == {"ask", "kb", "setup", "settings", "admin"}
+    assert set(payloads) == {"ask", "kb", "setup", "settings", "admin", "Add to knowledge"}
+    assert payloads["Add to knowledge"]["type"] == 3  # message context menu
     kb_subs = {o["name"] for o in payloads["kb"]["options"]}
     assert kb_subs == {"add", "show", "verify", "retract", "obsolete"}
     ask_opts = {o["name"]: o for o in payloads["ask"]["options"]}
     assert ask_opts["question"]["required"] and ask_opts["category"]["autocomplete"]
     for p in payloads.values():
-        assert len(p["description"]) <= 100
+        assert len(p.get("description", "")) <= 100

@@ -15,7 +15,10 @@ Generic core (`guru`) με profiles· το πρώτο profile είναι το AI
 |-----------|--------|
 | M0 Foundations (DB, migrations, audit hash chain, job queue, runner) | ✅ |
 | M1 Walking skeleton χωρίς AI (config/profiles, `/settings`, permissions, access enforcement, rate limits, `/kb`, `/ask`, mentions, FTS retrieval) | ✅ |
-| M2 Discord ingestion + local LLM extraction + moderator review | ⏳ |
+| M2 Discord ingestion (home channel, 📌, «Add to knowledge», `μάθε:`), Ollama extraction με validators, embeddings dedupe, conflicts, edit/delete sync, moderator review channel, learned gate | ✅ |
+| M3 Vector retrieval στις ερωτήσεις, LLM σύνθεση με grounding checks, answer cache | ⏳ |
+| M4 Web πηγές: discovery (SearxNG), validation, source reputation | ⏳ |
+| M5 FAQ (forum, έγκριση, ενημέρωση/deprecation) | ⏳ |
 
 ## Εγκατάσταση (ένας host, Docker)
 
@@ -34,7 +37,18 @@ Generic core (`guru`) με profiles· το πρώτο profile είναι το AI
    - `/setup template:aion2` → δημιουργεί το profile.
    - `/settings` → ποιοι μιλούν στο AI, contributors, moderators, admins, trusted ρόλοι, home channel,
      moderator review channel, τι γίνεται με μηνύματα χωρίς πρόσβαση, όρια χρήσης.
-5. Χρήση: `@bot ερώτηση` οπουδήποτε, `/ask`, `/kb add` (γνώση από την ομάδα), `/kb show K-12`.
+5. Χρήση:
+   - `@bot ερώτηση` οπουδήποτε ή `/ask` → απάντηση μόνο από τη βάση, με πηγές και κατάσταση (✅/☑️/⚠️/⚔️).
+   - Ό,τι γράφεται στο **home channel** διαβάζεται· τα χρήσιμα εξάγονται από το local LLM και πάνε για έγκριση
+     στο **review channel** (✅ Keep / ❌ Reject / ✏️ Edit). Οι απαντήσεις του bot βαθμολογούνται εκεί (👍/👎).
+   - Γνώση από την ομάδα: `@bot μάθε: …`, 📌 σε οποιοδήποτε μήνυμα (trusted), δεξί κλικ → Apps → **Add to knowledge**,
+     `/kb add`. Από trusted μέλη καταχωρείται ως επιβεβαιωμένη.
+   - `/kb show K-12` (πηγές), `/kb verify|retract|obsolete`, `/admin learning` (labels & αυτοματοποίηση).
+
+**Μοντέλα (guru.yaml):** οποιοδήποτε Ollama μοντέλο ανά task (π.χ. `gpt-oss:20b`, `hermes3`). Embeddings μέσω Ollama
+(`bge-m3`, multilingual). Με 16 GB VRAM το 20B μοντέλο + bge-m3 χωράνε οριακά· αν όχι, μικρότερο embedding μοντέλο.
+Η αυτόματη απόφαση «κρατάμε/όχι» ενεργοποιείται μόνο όταν, με αρκετές αποφάσεις moderators, η μετρημένη ακρίβεια
+ξεπεράσει το όριο (`review.claim_keep.auto` στο config).
 
 Health/metrics: `http://127.0.0.1:8080/healthz`, `/readyz`, `/metrics` (μόνο localhost).
 

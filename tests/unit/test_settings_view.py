@@ -21,8 +21,17 @@ def _state() -> ProfileState:
     ss.set_channel("mod_review", [21])(data)
     cfg = load_yaml(__import__("yaml").safe_dump(data))
     return ProfileState(
-        profile_id=1, slug="aion2", guild_id=1, version=3, knowledge_epoch=0, config=cfg, category_ids={},
-        category_keys={}, source_ids={}, matcher=AliasMatcher(), resolver=PermissionResolver([], TrustRules()),
+        profile_id=1,
+        slug="aion2",
+        guild_id=1,
+        version=3,
+        knowledge_epoch=0,
+        config=cfg,
+        category_ids={},
+        category_keys={},
+        source_ids={},
+        matcher=AliasMatcher(),
+        resolver=PermissionResolver([], TrustRules()),
         channel_roles={20: {"home"}, 21: {"mod_review"}},
     )
 

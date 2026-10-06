@@ -58,7 +58,7 @@ async def _run_api(rt: Runtime) -> None:
 async def _run_worker(rt: Runtime) -> None:
     from guru.services.wiring import build_job_handlers
 
-    handlers = build_job_handlers(rt)
+    handlers = await build_job_handlers(rt)
     cfg = rt.settings.worker
     worker = Worker(
         rt.db,

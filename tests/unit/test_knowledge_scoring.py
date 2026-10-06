@@ -54,7 +54,9 @@ def test_official_source_verifies_unless_newer_official_contradicts() -> None:
 def test_trusted_explicit_capture_verifies() -> None:
     assert d([ev(2, "discord:user:1", human=True, endorser_tier=3)]) == "verified"
     assert d([ev(2, "discord:user:1", human=True, endorser_tier=2)]) == "unverified"
-    # Machine-extracted from a trusted author is not an explicit endorsement.
+    # 📌 by a trusted member on an LLM-extracted claim is still an endorsement.
+    assert d([ev(2, "discord:user:1", endorser_tier=3)]) == "verified"
+    # Passively extracted from a trusted author (no endorsement) is not.
     assert d([ev(3, "discord:user:1")]) == "unverified"
 
 

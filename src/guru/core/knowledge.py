@@ -143,8 +143,10 @@ def derive(
 
     newest_official_sup = max((e.evidence_at for e in sup if e.tier >= 4), default=None)
     newest_official_con = max((e.evidence_at for e in con if e.tier >= 4), default=None)
+    # Explicit capture (/kb add, 📌, "Add to knowledge") by a trusted member is a human endorsement,
+    # even when an LLM rephrased the text: grounding is enforced by the verbatim quote check.
     trusted_explicit = any(
-        e.human and e.endorser_tier is not None and e.endorser_tier >= policy.trusted_explicit_min_tier for e in sup
+        e.endorser_tier is not None and e.endorser_tier >= policy.trusted_explicit_min_tier for e in sup
     )
 
     verification: Verification

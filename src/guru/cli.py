@@ -24,9 +24,9 @@ async def _migrate() -> int:
 
 
 async def _config(args: argparse.Namespace) -> int:
-    from guru.services import config_cli
+    from guru.services.config_cli import main as config_main
 
-    return await config_cli.main(args)
+    return await config_main(args)
 
 
 async def _jobs(args: argparse.Namespace) -> int:
