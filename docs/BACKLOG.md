@@ -58,7 +58,7 @@ M4 και M5 μπορούν να τρέξουν παράλληλα μετά το
 | C-05 | Text toolkit: normalization (casefold, τόνοι/accents, τελικό σ, Greeklish map), script/lang detect, tokenization, numbers/units, alias automaton (pyahocorasick) με rebuild σε config/ref change· FTS configs | C-02 | M | Golden tests el/en/Greeklish· automaton 10k aliases < 1 ms/query |
 | C-06 | AION 2 profile v0 (categories, dimensions, intents, trust, prompts, entity types) | C-01, D-03, D-04, D-11, D-20 | M | Εγκεκριμένο από χρήστη· apply χωρίς errors |
 | DS-01 | Discord adapter: intents, connect, guild-scoped command sync, `allowed_mentions=none`, defer helper, error handler, channel permission checks | F-07, C-04 | M | Bot online στο staging guild· commands εμφανίζονται |
-| DS-02 | Admin commands: `/admin config export|import|diff|apply|rollback`, `/admin channel`, `/admin grant`, `/admin jobs`, `/admin audit` | DS-01, C-02 | M | Όλα permission-checked & audited· import με attachment + confirm button |
+| DS-02 | `/settings` panel (D-20): role/channel selectors για trusted, ποιους ακούει, σε ποιους απαντά, capabilities, watched/ask/FAQ channels· κάθε αλλαγή = νέο config version. Επιπλέον `/admin config export|import|diff|apply|rollback`, `/admin jobs`, `/admin audit` | DS-01, C-02 | L | Τίποτα hardcoded· όλα permission-checked & audited· bootstrap μόνο server Administrator |
 | DS-03 | Renderer: embeds, badges, sources, applicability, components (Πηγές/👍/👎/Αναφορά), el/en localization, όρια Discord (2000/4096/6000) | DS-01 | M | Snapshot tests· truncation χωρίς σπάσιμο markdown |
 | K-01 | Migration 0003: observations, revisions, chunks, claims, claim_revisions, evidence, relations, conflicts, review_tasks + repositories | C-02 | L | Repository integration tests· constraints επιβάλλονται |
 | K-02 | Scoring & verification state machine (pure) + `recompute(claim)` single writer + events → jobs (outbox) + `knowledge_epoch` | K-01, C-04 | M | Hypothesis invariants (π.χ. verified ⇒ basis, no evidence ⇒ retracted εκτός human) |
@@ -108,7 +108,8 @@ M4 και M5 μπορούν να τρέξουν παράλληλα μετά το
 | W-03 | Content pipeline: trafilatura, metadata/dates (+confidence), lang, simhash near-dup → independence, heading-aware chunking, chunk FTS + embeddings, change detection | W-02, A-03 | L | Date extraction corpus· near-dup test· μόνο αλλαγμένα chunks |
 | W-04 | Web claim extraction + version inference + matching + scoring (reuse A-04/A-05) + liveness (404/410 → deactivate) | W-03, A-05 | M | Scenario: official update supersedes· community vs official conflict μένει open |
 | W-05 | Version change handling: νέο dimension value → `needs_review` + priority re-crawl | C-02, K-02 | S | Νέο patch → σωστά flags & badges |
-| W-06 | Optional translation step (T-TRANSLATE) για μη-canonical πηγές | W-03, A-01, D-03 | M | Μόνο αν D-03/D-04 το απαιτούν· number-preservation test |
+| W-07 | Source discovery: `SearchProvider` port + SearxNG adapter (self-hosted container), budgeted queries από entities/categories/knowledge gaps, νέες πηγές ως tier 1 | W-02 | M | Query budget τηρείται· discovered sources περνούν από W-01..W-04 |
+| W-08 | Source reputation: συμφωνία/διαφωνία κάθε πηγής με verified γνώση (team/official) → Beta score → αυτόματο tier 1↔3 με όρια· tier 4 και pin μόνο χειροκίνητα· audit σε κάθε αλλαγή | W-04, K-02 | M | Scenario: πηγή με συνεχή λάθη πέφτει tier, αξιόπιστη ανεβαίνει· pinned δεν αλλάζει |
 
 ## M5 — FAQ
 

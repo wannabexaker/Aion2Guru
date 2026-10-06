@@ -3,6 +3,18 @@
 > Κάθε απόφαση έχει **πρόταση** (default αν δεν απαντηθεί) και ποια backlog tasks μπλοκάρει.
 > Status: `OPEN` → `LOCKED (ημερομηνία, επιλογή)`.
 
+## 0. Κλειδωμένα (2026-10-06)
+
+| ID | Απόφαση | Συνέπεια στο design |
+|----|---------|---------------------|
+| D-01 | RTX 5070 Ti (16 GB VRAM), 32 GB RAM, ένας host | ~20B σε 4-bit (π.χ. gpt-oss-20b ≈ 13 GB) στη GPU· embeddings σε CPU |
+| D-02 | **Local LLM** ως default. Cloud API μόνο προαιρετικά (pay-as-you-go key, όχι ChatGPT Plus) για bootstrap/eval — **εκκρεμεί επιβεβαίωση** | Per-task model routing ήδη στο design· κανένα Discord content στο cloud by default |
+| D-03 | Γλώσσες: **en (βασική) + el + Greeklish**. Καμία άλλη. Απάντηση στη γλώσσα/γραφή της ερώτησης (και Greeklish) | Πηγές σε άλλες γλώσσες αγνοούνται· φεύγει το T-TRANSLATE/W-06· deterministic transliteration el→Greeklish για templates |
+| D-04 | **Global** = βάση. Πληροφορίες άλλων regions κρατιούνται με ετικέτα region, χαμηλότερο ranking, ρητή σήμανση | `region` default `[GLOBAL]`· version timeline από Global patches |
+| D-11 | Δεν υπάρχει λίστα πηγών: το σύστημα **ανακαλύπτει** πηγές, τις συγκρίνει και **προσαρμόζει την αξιοπιστία** τους. Η γνώση της ομάδας στο Discord = αξιόπιστη αναφορά | Μπαίνουν στο MVP: search provider (SearxNG self-hosted) + source discovery + **source reputation** (στατιστική συμφωνίας με verified γνώση, όχι AI). Tier 4 μόνο χειροκίνητα. Team role = trusted |
+| D-12 | Config στη DB, versioned, YAML import/export | Όπως στο design |
+| D-20 | Ρόλοι/trust/ποιους ακούει/σε ποιους απαντά: **ρυθμίσεις μέσα στο bot**, όχι hardcoded | `/settings` panel στο Discord με role/channel selectors· bootstrap μόνο για server Administrator |
+
 ## 1. Αποφάσεις
 
 ### 1.1 Blocking (χρειάζονται πριν από M1/M2)

@@ -693,8 +693,9 @@ Slash: `defer()` αμέσως (όριο Discord 3 s), follow-up εντός 15 λ
 |---------|-----|-----------|
 | Curated sources (page list, RSS/Atom, sitemap) | ✅ | Ανά profile, με tier, schedule, selectors |
 | `/kb ingest-url` από trusted | ✅ | Explicit web capture |
-| Search provider (SearxNG/Brave/…) | P2 | Πίσω από `SearchProvider` port |
-| Gap-driven search (επαναλαμβανόμενα `no_answer`) | P2 | Budgeted, async |
+| Search provider (SearxNG self-hosted) + source discovery | ✅ (D-11) | Πίσω από `SearchProvider` port· budgeted· νέες πηγές ξεκινούν tier 1 |
+| Source reputation (αυτόματη προσαρμογή tier 1↔3) | ✅ (D-11) | Συμφωνία με verified γνώση· tier 4 μόνο χειροκίνητα (W-08) |
+| Gap-driven search (επαναλαμβανόμενα `no_answer`) | ✅ (D-11) | Budgeted, async |
 | Live search στο query | P2 | Ρητό opt-in, αποτελέσματα `unverified` |
 
 Άγνωστα domains → dynamic `sources` row με tier από `domain_trust` rules (default tier 1).
