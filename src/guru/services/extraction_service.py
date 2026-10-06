@@ -483,4 +483,10 @@ class ExtractionService:
                       AND NOT EXISTS (SELECT 1 FROM claim_evidence e WHERE e.observation_id = o.id AND e.active)""",
             )
             await conn.execute("DELETE FROM query_log WHERE expires_at < $1", now)
+            await conn.execute(
+                """DELETE FROM answer_cache a USING profiles p
+                    WHERE a.profile_id = p.id
+                      AND (a.knowledge_epoch <> p.knowledge_epoch OR a.created_at < $1 - interval '2 days')""",
+                now,
+            )
             await usage.gc(conn, now - timedelta(days=2))

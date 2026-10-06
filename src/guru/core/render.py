@@ -33,6 +33,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "src.import": "Import",
         "src.web": "Web",
         "answer.related": "Possibly relevant records:",
+        "answer.conflict": "Conflicting information — I can't confirm which one is correct:",
+        "answer.mixed": "Partly verified",
         "answer.no_answer": "I don't have documented knowledge about this yet.",
         "answer.off_topic": "This doesn't look related to {profile}. If it is, add a category, e.g. `#items`.",
         "answer.empty": "Ask me something about {profile}, e.g. `@bot where does the X boss spawn?`",
@@ -71,6 +73,8 @@ STRINGS: dict[str, dict[str, str]] = {
         "src.import": "Εισαγωγή",
         "src.web": "Web",
         "answer.related": "Πιθανώς σχετικές καταχωρήσεις:",
+        "answer.conflict": "Αντικρουόμενες πληροφορίες — δεν μπορώ να επιβεβαιώσω ποια ισχύει:",
+        "answer.mixed": "Εν μέρει επιβεβαιωμένο",
         "answer.no_answer": "Δεν έχω ακόμα τεκμηριωμένη γνώση γι' αυτό.",
         "answer.off_topic": "Δεν φαίνεται να αφορά το {profile}. Αν αφορά, πρόσθεσε κατηγορία, π.χ. `#items`.",
         "answer.empty": "Ρώτα με κάτι για το {profile}, π.χ. `@bot πού βγαίνει ο boss X;`",
@@ -207,6 +211,35 @@ def render_answer(answer: Any, profile_name: str) -> MessagePayload:
             embed=EmbedData(
                 clip(desc, DESC_LIMIT), COLOR.get(item.verification, COLOR["none"]), fields=fields, footer=footer
             ),
+            buttons=list(FEEDBACK_BUTTONS),
+        )
+
+    if answer.mode == "conflict":
+        lines = [tr("answer.conflict", style)]
+        for item in answer.items:
+            src = item.sources[0] if item.sources else None
+            where = f" — {source_line(1, src, style)[4:]}" if src else ""
+            lines.append(f"• {BADGE.get(item.verification, '')} {clip(item.statement, 300)} `K-{item.claim_id}`{where}")
+        return MessagePayload(
+            embed=EmbedData(clip("\n".join(lines), DESC_LIMIT), COLOR["disputed"]), buttons=list(FEEDBACK_BUTTONS)
+        )
+
+    if answer.mode == "llm":
+        state = answer.overall_state
+        status = status_line(state, None, style)
+        if state == "corroborated" and any(i.verification == "unverified" for i in answer.items):
+            status = f"{BADGE['corroborated']} {tr('answer.mixed', style)}"
+        desc = answer.text or ""
+        if state == "unverified":
+            desc += "\n\n_" + tr("answer.unverified_note", style) + "_"
+        sources = [s for i in answer.items for s in i.sources][:4]
+        fields = [EmbedField(tr("field.status", style), status)]
+        if sources:
+            lines = [source_line(n + 1, s, style) for n, s in enumerate(sources)]
+            fields.append(EmbedField(tr("field.sources", style), clip("\n".join(lines), FIELD_LIMIT)))
+        footer = " · ".join(f"K-{i.claim_id}" for i in answer.items) + " · AI"
+        return MessagePayload(
+            embed=EmbedData(clip(desc, DESC_LIMIT), COLOR.get(state, COLOR["none"]), fields=fields, footer=footer),
             buttons=list(FEEDBACK_BUTTONS),
         )
 

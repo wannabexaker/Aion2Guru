@@ -117,6 +117,7 @@ class Candidate:
     summary: dict[str, object]
     ranks: dict[str, int] = field(default_factory=dict)  # list name → 1-based rank
     coverage: float = 0.0
+    similarity: float = 0.0  # cosine to the query (vector retrieval), 0 if not retrieved by vector
     score: float = 0.0
 
 
@@ -139,8 +140,9 @@ def rank(candidates: list[Candidate], params: RankingParams, now: datetime) -> l
         cat = 1.0
         if params.boost_categories and c.category_id not in params.boost_categories:
             cat = params.soft_category_factor
-        # Coverage gates relevance; sqrt keeps partial matches competitive but below full ones.
-        c.score = rrf * state * fresh * cat * math.sqrt(max(c.coverage, 0.0))
+        # Coverage (lexical) or similarity (semantic) gates relevance; sqrt keeps partial matches competitive.
+        relevance = max(c.coverage, c.similarity)
+        c.score = rrf * state * fresh * cat * math.sqrt(max(relevance, 0.0))
     return sorted(candidates, key=lambda c: (-c.score, c.claim_id))
 
 

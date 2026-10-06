@@ -8,10 +8,11 @@ from pydantic import SecretStr
 
 from guru.discord_bot.client import GuruBot
 from guru.discord_bot.commands import register_commands
+from guru.settings import Settings
 
 
 def test_command_tree_serializes() -> None:
-    settings = SimpleNamespace(owner_ids=[], hash_salt=SecretStr("x"), guild_ids=[], discord_token=None)
+    settings = Settings(hash_salt=SecretStr("x"))
     rt = SimpleNamespace(db=None, settings=settings, ready={}, dsn="")
     bot = GuruBot(rt)  # type: ignore[arg-type]
     register_commands(bot)

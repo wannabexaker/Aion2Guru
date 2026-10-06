@@ -133,6 +133,10 @@ class MessageRouter:
             )
             return RouteResult([Reply(payload)], reason=f"limited:{decision.window}")
 
+        # Follow-up: replying to one of our answers carries that question's context (no chat history).
+        context_text = None
+        if msg.reference_message_id is not None:
+            context_text = await self.queries.previous_question(msg.reference_message_id)
         req = QueryRequest(
             state=state,
             principal=msg.author,
@@ -141,6 +145,7 @@ class MessageRouter:
             channel_id=msg.channel_id,
             allowed_channels=msg.visible_channels(state),
             request_message_id=msg.message_id,
+            context_text=context_text,
         )
         answer = await self.queries.answer(req)
         payload = render_answer(answer, state.config.profile.name)

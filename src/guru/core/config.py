@@ -348,6 +348,8 @@ class SearchCfg(_Base):
     faq_match_threshold: float = 0.85
     min_coverage: float = Field(default=0.5, gt=0, le=1)
     trigram_threshold: float = Field(default=0.45, gt=0, le=1)
+    # Minimum cosine similarity for a vector-only match (model dependent → calibrate with `guru eval`).
+    vector_min_similarity: float = Field(default=0.6, gt=0, le=1)
 
 
 class AnswerCfg(_Base):
@@ -356,6 +358,8 @@ class AnswerCfg(_Base):
     max_context_records: int = Field(default=6, ge=1, le=12)
     max_context_tokens: int = 1800
     max_answer_tokens: int = 350
+    max_answer_words: int = Field(default=120, ge=20, le=400)
+    cache_ttl_hours: int = Field(default=24, ge=0)
     dominance_ratio: float = 1.6
     max_records_listed: int = Field(default=3, ge=1, le=5)
     show_record_ids: bool = True

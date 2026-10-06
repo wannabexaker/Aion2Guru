@@ -21,6 +21,8 @@ from guru.discord_bot.ui import (
 )
 from guru.jobs.queue import Job, PermanentJobError
 from guru.jobs.worker import Worker, WorkerConfig
+from guru.llm.client import build_llm_client
+from guru.llm.embeddings import build_embedder
 from guru.logging import correlation, get_logger
 from guru.services.config_service import ConfigService
 from guru.services.ingest_service import CapturedMessage, IngestService
@@ -59,13 +61,15 @@ class GuruBot(discord.Client):
         self.rt = rt
         self.tree = app_commands.CommandTree(self)
         self.registry = ProfileRegistry(rt.db, frozenset(rt.settings.owner_ids))
-        self.queries = QueryService(rt.db)
+        self.salt = rt.settings.hash_salt.get_secret_value()
+        self.limiter = RateLimiter(rt.db, self.salt)
+        self.llm = build_llm_client(rt.settings)
+        self.embedder = build_embedder(rt.settings.embeddings)
+        self.queries = QueryService(rt.db, embedder=self.embedder, llm=self.llm, llm_quota=self.limiter.take_llm)
         self.knowledge = KnowledgeService(rt.db)
         self.configs = ConfigService(rt.db)
         self.ingest = IngestService(rt.db)
         self.reviews = ReviewService(rt.db)
-        self.salt = rt.settings.hash_salt.get_secret_value()
-        self.limiter = RateLimiter(rt.db, self.salt)
         self.router: MessageRouter | None = None
         self._jobs_stop = asyncio.Event()
         self._jobs_task: asyncio.Task[None] | None = None
