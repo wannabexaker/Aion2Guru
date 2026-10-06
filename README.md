@@ -18,7 +18,8 @@ Generic core (`guru`) με profiles· το πρώτο profile είναι το AI
 | M2 Discord ingestion (home channel, 📌, «Add to knowledge», `μάθε:`), Ollama extraction με validators, embeddings dedupe, conflicts, edit/delete sync, moderator review channel, learned gate | ✅ |
 | M3 Vector retrieval (FTS → trigram → vector, RRF), LLM σύνθεση μόνο όταν χρειάζεται με grounding checks και fallback, conflicts με όλες τις πλευρές, answer cache (epoch/visibility), LLM quota, follow-ups | ✅ |
 | M4 Web: SSRF-safe fetcher, robots, conditional GET, extraction/dates/near-dup/chunking, web claims, liveness, SearxNG discovery (budget, κενά γνώσης), source reputation, `/kb ingest-url` | ✅ |
-| M5 FAQ (forum, έγκριση, ενημέρωση/deprecation) | ⏳ |
+| M5 FAQ: candidates (verified/δημοφιλή), draft (LLM με grounding ή template), έγκριση στο review channel (quorum, four-eyes), forum/text reconciler, banners/deprecation όταν αλλάζει η γνώση, FAQ-first απαντήσεις, `/faq` | ✅ |
+| M6 Hardening: eval harness, security suite, backups/runbook, βαθμονόμηση thresholds | ⏳ |
 
 ## Εγκατάσταση (ένας host, Docker)
 
@@ -43,7 +44,9 @@ Generic core (`guru`) με profiles· το πρώτο profile είναι το AI
      στο **review channel** (✅ Keep / ❌ Reject / ✏️ Edit). Οι απαντήσεις του bot βαθμολογούνται εκεί (👍/👎).
    - Γνώση από την ομάδα: `@bot μάθε: …`, 📌 σε οποιοδήποτε μήνυμα (trusted), δεξί κλικ → Apps → **Add to knowledge**,
      `/kb add`. Από trusted μέλη καταχωρείται ως επιβεβαιωμένη.
-   - `/kb show K-12` (πηγές), `/kb verify|retract|obsolete`, `/admin learning` (labels & αυτοματοποίηση).
+   - `/kb show K-12` (πηγές), `/kb verify|retract|obsolete`, `/kb ingest-url`, `/admin learning`.
+   - FAQ: επιβεβαιωμένη/δημοφιλής γνώση → draft → έγκριση στο review channel → δημοσίευση στο FAQ channel
+     (forum συνιστάται). `/faq ask` απαντά μόνο από εγκεκριμένο FAQ· `/faq create K-12`.
 
 **Μοντέλα (guru.yaml):** οποιοδήποτε Ollama μοντέλο ανά task (π.χ. `gpt-oss:20b`, `hermes3`). Embeddings μέσω Ollama
 (`bge-m3`, multilingual). Με 16 GB VRAM το 20B μοντέλο + bge-m3 χωράνε οριακά· αν όχι, μικρότερο embedding μοντέλο.

@@ -108,6 +108,7 @@ class Answer:
     relevance: float = 0.0
     entity_keys: list[str] = field(default_factory=list)
     llm_tokens: tuple[int, int] = (0, 0)
+    faq: dict[str, Any] | None = None  # FAQ hit (mode 'faq'): id, question, answer, banner, url
     cached: bool = False
     degraded: bool = False  # a fallback path ran (embedder/LLM down, quota) → never cached
 
@@ -115,9 +116,13 @@ class Answer:
     def answered_by(self) -> str:
         if self.cached:
             return "cache"
-        return {"extractive": "extractive", "list": "extractive", "conflict": "extractive", "llm": "llm"}.get(
-            self.mode, "no_answer"
-        )
+        return {
+            "extractive": "extractive",
+            "list": "extractive",
+            "conflict": "extractive",
+            "llm": "llm",
+            "faq": "faq",
+        }.get(self.mode, "no_answer")
 
     @property
     def claim_ids(self) -> list[int]:
@@ -182,8 +187,10 @@ class QueryService:
         embedder: emb.Embedder | None = None,
         llm: LLMClient | None = None,
         llm_quota: LLMQuota | None = None,
+        faq: Any = None,  # FaqService
     ) -> None:
         self.db = db
+        self.faq = faq
         self.embedder = embedder
         self.llm = llm
         self.llm_quota = llm_quota
@@ -210,11 +217,6 @@ class QueryService:
         if not content_tokens(parsed.text) and not req.context_text:
             answer.mode = "empty"
             return answer
-        if scope.faq_only:
-            answer.mode = "faq_unavailable"  # FAQ store arrives in M5
-            answer.route.append("faq")
-            return answer
-
         cache_key = self._cache_key(req, scope.name, category_key, retrieval_text, lang.style)
         cached = await self._cache_get(state, cache_key)
         if cached is not None:
@@ -222,6 +224,33 @@ class QueryService:
             cached.route = ["cache", *cached.route]
             cached.stage_ms = {"total": (time.perf_counter() - t0) * 1000}
             return cached
+
+        # 1st rung: an approved FAQ entry answers verbatim (no retrieval ranking, no LLM).
+        if self.faq is not None and not category_key:
+            threshold = cfg.search.faq_match_threshold * (0.75 if scope.faq_only else 1.0)
+            hit = await self.faq.search(state, parsed.text, threshold)
+            if hit is not None:
+                answer.mode = "faq"
+                answer.route.append(f"faq:{hit['id']}")
+                url = None
+                if hit["thread_id"]:
+                    url = f"https://discord.com/channels/{state.guild_id}/{hit['thread_id']}"
+                elif hit["message_id"]:
+                    url = f"https://discord.com/channels/{state.guild_id}/{hit['pub_channel']}/{hit['message_id']}"
+                answer.faq = {
+                    "id": hit["id"],
+                    "question": hit["question"],
+                    "answer": hit["answer"],
+                    "banner": hit["banner"],
+                    "url": url,
+                }
+                await self._finish(state, cache_key, answer, stage, t0)
+                return answer
+        if scope.faq_only:
+            answer.mode = "no_answer"
+            answer.route.append("faq:none")
+            await self._finish(state, cache_key, answer, stage, t0)
+            return answer
 
         # Relevance & routing: alias/keyword hits (deterministic).
         hits = state.matcher.match(retrieval_text)

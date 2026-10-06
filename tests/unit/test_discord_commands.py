@@ -17,7 +17,7 @@ def test_command_tree_serializes() -> None:
     bot = GuruBot(rt)  # type: ignore[arg-type]
     register_commands(bot)
     payloads = {c.name: c.to_dict(bot.tree) for c in bot.tree.get_commands()}
-    assert set(payloads) == {"ask", "kb", "setup", "settings", "admin", "Add to knowledge"}
+    assert set(payloads) == {"ask", "kb", "faq", "setup", "settings", "admin", "Add to knowledge"}
     assert payloads["Add to knowledge"]["type"] == 3  # message context menu
     kb_subs = {o["name"] for o in payloads["kb"]["options"]}
     assert kb_subs == {"add", "show", "verify", "retract", "obsolete", "ingest-url"}

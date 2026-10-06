@@ -9,8 +9,9 @@ import discord
 from discord import app_commands
 
 from guru.core.permissions import Principal
-from guru.core.render import COLOR, EmbedField, render_review, tr
+from guru.core.render import COLOR, EmbedField, render_faq_post, render_review, tr
 from guru.discord_bot.ui import (
+    EditFaqModal,
     EditStatementModal,
     FeedbackButton,
     ReviewButton,
@@ -19,12 +20,13 @@ from guru.discord_bot.ui import (
     send_kwargs,
     to_embed,
 )
-from guru.jobs.queue import Job, PermanentJobError
+from guru.jobs.queue import Job, PermanentJobError, RetryLater
 from guru.jobs.worker import Worker, WorkerConfig
 from guru.llm.client import build_llm_client
 from guru.llm.embeddings import build_embedder
 from guru.logging import correlation, get_logger
 from guru.services.config_service import ConfigService
+from guru.services.faq_service import FaqService
 from guru.services.ingest_service import CapturedMessage, IngestService
 from guru.services.knowledge_service import KnowledgeService, NotFound, PermissionDenied
 from guru.services.profiles import ProfileRegistry, ProfileState
@@ -67,11 +69,14 @@ class GuruBot(discord.Client):
         self.limiter = RateLimiter(rt.db, self.salt)
         self.llm = build_llm_client(rt.settings)
         self.embedder = build_embedder(rt.settings.embeddings)
-        self.queries = QueryService(rt.db, embedder=self.embedder, llm=self.llm, llm_quota=self.limiter.take_llm)
+        self.faq = FaqService(rt.db, self.registry, self.llm)
+        self.queries = QueryService(
+            rt.db, embedder=self.embedder, llm=self.llm, llm_quota=self.limiter.take_llm, faq=self.faq
+        )
         self.knowledge = KnowledgeService(rt.db)
         self.configs = ConfigService(rt.db)
         self.ingest = IngestService(rt.db)
-        self.reviews = ReviewService(rt.db)
+        self.reviews = ReviewService(rt.db, faq=self.faq)
         self.web = WebService(rt.db, self.registry, SafeFetcher(rt.settings.web), None)
         self.router: MessageRouter | None = None
         self._jobs_stop = asyncio.Event()
@@ -102,7 +107,11 @@ class GuruBot(discord.Client):
         worker = Worker(
             self.rt.db,
             self.rt.dsn,
-            {"discord.review_post": self._job_review_post, "discord.review_update": self._job_review_update},
+            {
+                "discord.review_post": self._job_review_post,
+                "discord.review_update": self._job_review_update,
+                "discord.faq_sync": self._job_faq_sync,
+            },
             WorkerConfig(concurrency=2, poll_seconds=10),
         )
         self._jobs_task = asyncio.create_task(worker.run(self._jobs_stop))
@@ -303,21 +312,42 @@ class GuruBot(discord.Client):
 
     # ------------------------------------------------------------ moderator review (D-27)
     async def handle_review_click(
-        self, interaction: discord.Interaction, task_id: int, decision: str, new_statement: str | None = None
+        self,
+        interaction: discord.Interaction,
+        task_id: int,
+        decision: str,
+        new_statement: str | None = None,
+        faq_edit: tuple[str, str] | None = None,
     ) -> None:
         state = self.state_for(interaction.guild_id, interaction.channel)
         principal = principal_of(interaction.user)
         try:
             if state is None:
                 raise NotFound("profile")
-            if decision == "edit" and new_statement is None:
+            if decision == "edit" and new_statement is None and faq_edit is None:
                 if not state.resolver.has(principal, "review.vote"):
                     raise PermissionDenied("review.vote")
-                task = await self.rt.db.fetchrow("SELECT payload FROM review_tasks WHERE id = $1", task_id)
-                current = (task["payload"] or {}).get("statement", "") if task else ""
-                await interaction.response.send_modal(EditStatementModal(self, task_id, current))
+                task = await self.rt.db.fetchrow(
+                    "SELECT kind, target_id, payload FROM review_tasks WHERE id = $1", task_id
+                )
+                if task is None:
+                    raise NotFound(task_id)
+                payload = task["payload"] or {}
+                if task["kind"] == "faq_approval":
+                    faq = await self.rt.db.fetchrow(
+                        "SELECT question, answer FROM faq_entries WHERE id = $1", task["target_id"]
+                    )
+                    q = faq["question"] if faq else payload.get("question", "")
+                    a = faq["answer"] if faq else payload.get("answer", "")
+                    await interaction.response.send_modal(EditFaqModal(self, task_id, q, a))
+                else:
+                    await interaction.response.send_modal(
+                        EditStatementModal(self, task_id, payload.get("statement", ""))
+                    )
                 return
-            outcome = await self.reviews.vote(state, principal, task_id, decision, new_statement=new_statement)
+            outcome = await self.reviews.vote(
+                state, principal, task_id, decision, new_statement=new_statement, faq_edit=faq_edit
+            )
         except PermissionDenied as exc:
             await respond_text(interaction, tr("perm.denied", self._review_style(state), capability=exc.capability))
             return
@@ -362,7 +392,8 @@ class GuruBot(discord.Client):
         if payload.embed is not None:
             decision = (task["outcome"] or {}).get("decision", task["status"])
             who = f"<@{task['closer']}>" if task["closer"] else "auto"
-            payload.embed.color = COLOR["verified"] if decision in ("keep", "edit", "good") else COLOR["error"]
+            positive = ("keep", "edit", "good", "approve")
+            payload.embed.color = COLOR["verified"] if decision in positive else COLOR["error"]
             payload.embed.fields.append(EmbedField("✔️", tr("review.decided", style, decision=decision, who=who)))
         try:
             channel = await self._channel(task["channel_id"])
@@ -371,6 +402,75 @@ class GuruBot(discord.Client):
             return
         except discord.Forbidden as exc:
             raise PermanentJobError("cannot edit review message") from exc
+
+    async def _job_faq_sync(self, job: Job) -> None:
+        """Reconciler: make the Discord post match desired_state/desired_rev (create, edit, lock, delete)."""
+        row = await self.rt.db.fetchrow(
+            """SELECT f.*, p.channel_id, p.thread_id, p.message_id, p.desired_state, p.desired_rev,
+                      p.published_rev, p.published_state, cat.name AS category_name
+                 FROM faq_entries f JOIN faq_publications p ON p.faq_id = f.id
+                 LEFT JOIN categories cat ON cat.id = f.category_id
+                WHERE f.id = $1""",
+            job.payload["faq_id"],
+        )
+        if row is None:
+            return
+        if row["published_rev"] == row["desired_rev"] and row["published_state"] == row["desired_state"]:
+            await self.rt.db.execute("UPDATE faq_publications SET sync_status = 'in_sync' WHERE faq_id = $1", row["id"])
+            return
+        state = self.registry.get(row["profile_id"])
+        embed = to_embed(render_faq_post(dict(row), row["desired_state"], self._review_style(state)))
+        assert embed is not None
+        desired = row["desired_state"]
+        thread_id, message_id = row["thread_id"], row["message_id"]
+        try:
+            channel = await self._channel(row["channel_id"])
+            if desired == "removed":
+                if thread_id:
+                    await (await self._channel(thread_id)).delete()
+                elif message_id:
+                    await channel.get_partial_message(message_id).delete()
+                thread_id = message_id = None
+            elif isinstance(channel, discord.ForumChannel):
+                if thread_id is None:
+                    category = (row["category_name"] or "").lower()
+                    tags = [t for t in channel.available_tags if category and t.name.lower() == category][:5]
+                    created = await channel.create_thread(name=row["question"][:100], embed=embed, applied_tags=tags)
+                    thread_id, message_id = created.thread.id, created.message.id
+                else:
+                    thread = await self._channel(thread_id)
+                    if thread.archived or thread.locked:
+                        await thread.edit(archived=False, locked=False)
+                    await thread.get_partial_message(message_id).edit(embed=embed)
+                    closed = desired == "deprecated"
+                    await thread.edit(name=row["question"][:100], archived=closed, locked=closed)
+            elif message_id is None:
+                message_id = (await channel.send(embed=embed)).id
+            else:
+                await channel.get_partial_message(message_id).edit(embed=embed)
+        except discord.NotFound:
+            # Someone deleted the post/thread: forget it and republish on retry (drift repair).
+            await self.rt.db.execute(
+                """UPDATE faq_publications SET thread_id = NULL, message_id = NULL, published_rev = NULL
+                    WHERE faq_id = $1""",
+                row["id"],
+            )
+            if desired == "removed":
+                return
+            raise RetryLater(5, "post missing, republishing") from None
+        except discord.Forbidden as exc:
+            await self.rt.db.execute(
+                "UPDATE faq_publications SET sync_status = 'error', last_error = $2 WHERE faq_id = $1",
+                row["id"],
+                "missing permissions in the FAQ channel",
+            )
+            raise PermanentJobError("cannot publish FAQ (permissions)") from exc
+        await self.rt.db.execute(
+            """UPDATE faq_publications SET thread_id = $2, message_id = $3, published_state = $4, published_rev = $5,
+                      sync_status = 'in_sync', last_synced_at = now(), last_error = NULL, attempts = 0
+                WHERE faq_id = $1""",
+            row["id"], thread_id, message_id, desired, row["desired_rev"],
+        )  # fmt: skip
 
 
 async def run_bot(rt: Runtime) -> None:

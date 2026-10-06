@@ -117,7 +117,8 @@ async def test_off_topic_and_scope_and_hard_category(db: Database) -> None:
     # web scope: knowledge is manual → excluded; internal includes it
     assert not (await qs.answer(ask(state, "web: dungeon entry reset"))).items
     assert (await qs.answer(ask(state, "internal: dungeon entry reset"))).items
-    assert (await qs.answer(ask(state, "faq: dungeon entry reset"))).mode == "faq_unavailable"
+    faq_only = await qs.answer(ask(state, "faq: dungeon entry reset"))
+    assert faq_only.mode == "no_answer" and "faq:none" in faq_only.route  # no approved FAQ yet
 
 
 async def test_typo_tolerance_via_trigram(db: Database) -> None:

@@ -27,6 +27,7 @@ SECTIONS: list[tuple[str, str, str]] = [
     ("trusted", "⭐ Trusted roles (team)", "Their information counts as reliable"),
     ("home", "🏠 Bot home channel", "The bot reads everything here"),
     ("mod_review", "🧾 Moderator review channel", "The bot asks the team here"),
+    ("faq_publish", "📚 FAQ channel", "Forum (recommended) or text channel for approved FAQ"),
     ("access", "🚫 Unauthorized messages", "delete / ignore / notice"),
     ("limits", "⏱️ Rate limits", "Per user: minute / hour / day / AI answers"),
 ]
@@ -71,8 +72,10 @@ class SettingsView(discord.ui.View):
         e.add_field(name="⭐ Trusted roles", value=_mentions(trusted, "role"), inline=False)
         homes = [c.channel_id for c in cfg.channels_with_role("home")]
         mods = [c.channel_id for c in cfg.channels_with_role("mod_review")]
+        faqs = [c.channel_id for c in cfg.channels_with_role("faq_publish")]
         e.add_field(name="🏠 Home", value=_mentions(homes, "channel"), inline=True)
         e.add_field(name="🧾 Review", value=_mentions(mods, "channel"), inline=True)
+        e.add_field(name="📚 FAQ", value=_mentions(faqs, "channel"), inline=True)
         e.add_field(name="🚫 Unauthorized", value=cfg.access.unauthorized_action, inline=True)
         rl = cfg.rate_limits.default
         e.add_field(
@@ -128,7 +131,7 @@ class SectionSelect(discord.ui.Select["SettingsView"]):
                 await interaction.response.send_message("You need `perm.manage`.", ephemeral=True)
                 return
             view = TrustedView(p)
-        elif key in ("home", "mod_review"):
+        elif key in ("home", "mod_review", "faq_publish"):
             view = ChannelRoleView(p, key)
         elif key == "access":
             view = AccessView(p)
@@ -207,7 +210,7 @@ class ChannelRoleView(_SubView):
         self.select: discord.ui.ChannelSelect[ChannelRoleView] = discord.ui.ChannelSelect(
             placeholder="Channel",
             min_values=0,
-            max_values=1 if role == "mod_review" else 3,
+            max_values=3 if role == "home" else 1,
             channel_types=[discord.ChannelType.text, discord.ChannelType.forum],
             default_values=[discord.Object(id=c, type=discord.abc.GuildChannel) for c in current][:3],
         )

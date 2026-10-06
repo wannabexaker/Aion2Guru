@@ -237,6 +237,38 @@ def register_commands(bot: GuruBot) -> None:
 
     tree.add_command(app_commands.ContextMenu(name="Add to knowledge", callback=add_to_knowledge))
 
+    # ---------------------------------------------------------------- /faq
+    faq_group = app_commands.Group(name="faq", description="Frequently asked questions", guild_only=True)
+
+    @faq_group.command(name="ask", description="Answer only from the approved FAQ")
+    async def faq_ask(interaction: discord.Interaction, question: str) -> None:
+        ctx = Ctx(bot, interaction)
+        state = ctx.require("kb.query")
+        await interaction.response.defer(thinking=True)
+        req = QueryRequest(
+            state=state,
+            principal=ctx.principal,
+            text=question,
+            guild_id=state.guild_id,
+            channel_id=interaction.channel_id or 0,
+            allowed_channels=ctx.visible(),
+            scope_override="faq",
+        )
+        answer = await bot.queries.answer(req)
+        sent = await interaction.followup.send(
+            wait=True, **send_kwargs(render_answer(answer, state.config.profile.name))
+        )
+        await bot.queries.log(req, answer, user_hash=user_hash(bot.salt, ctx.principal.user_id), bot_message_id=sent.id)
+
+    @faq_group.command(name="create", description="Draft an FAQ entry from a record (goes to review)")
+    async def faq_create(interaction: discord.Interaction, record: str) -> None:
+        ctx = Ctx(bot, interaction)
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        faq_id = await bot.faq.create_from_record(ctx.require_state(), ctx.principal, _parse_claim_id(record))
+        await interaction.followup.send(f"Draft `F-{faq_id}` sent for review.", ephemeral=True)
+
+    tree.add_command(faq_group)
+
     # ---------------------------------------------------------------- /setup
     @tree.command(name="setup", description="Create the bot profile for this server from a template")
     @app_commands.guild_only()

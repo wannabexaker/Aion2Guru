@@ -23,6 +23,9 @@ from guru.store.knowledge import sha
 
 CLAIM_DECISIONS = {"keep", "reject", "edit"}
 ANSWER_DECISIONS = {"good", "bad"}
+FAQ_DECISIONS = {"approve", "reject", "edit"}
+DECISIONS = {"claim_keep": CLAIM_DECISIONS, "answer_rating": ANSWER_DECISIONS, "faq_approval": FAQ_DECISIONS}
+POSITIVE = {"claim_keep": ("keep", "edit"), "faq_approval": ("approve", "edit")}
 
 
 @dataclass(frozen=True)
@@ -195,8 +198,9 @@ async def _apply_claim_decision(
 
 
 class ReviewService:
-    def __init__(self, db: Any) -> None:
+    def __init__(self, db: Any, faq: Any = None) -> None:
         self.db = db
+        self.faq = faq  # FaqService (faq_approval tasks)
 
     async def vote(
         self,
@@ -206,6 +210,7 @@ class ReviewService:
         decision: str,
         *,
         new_statement: str | None = None,
+        faq_edit: tuple[str, str] | None = None,
     ) -> VoteOutcome:
         if not state.resolver.has(principal, "review.vote"):
             raise PermissionDenied("review.vote")
@@ -215,7 +220,7 @@ class ReviewService:
             )
             if task is None:
                 raise NotFound(task_id)
-            allowed = CLAIM_DECISIONS if task["kind"] == "claim_keep" else ANSWER_DECISIONS
+            allowed = DECISIONS.get(task["kind"], set())
             if decision not in allowed:
                 raise ValueError(f"invalid decision {decision!r} for {task['kind']}")
             if task["status"] != "open":
@@ -229,23 +234,24 @@ class ReviewService:
                 task_id,
                 actor_id,
                 decision,
-                new_statement,
+                new_statement or (faq_edit[0] if faq_edit else None),
             )
             counts = await self._counts(conn, task_id)
             quorum = state.config.review.quorum
-            # edit counts as keep for quorum; the latest edit text wins
-            keepish = counts.get("keep", 0) + counts.get("edit", 0)
             decided: str | None = None
-            if task["kind"] == "claim_keep":
-                if keepish >= quorum:
-                    decided = "edit" if new_statement and decision == "edit" else "keep"
+            if task["kind"] in POSITIVE:
+                positive, _ = POSITIVE[task["kind"]]
+                approvals = counts.get(positive, 0) + counts.get("edit", 0)
+                edited = decision == "edit" and (new_statement or faq_edit)
+                if approvals >= quorum:
+                    decided = "edit" if edited else positive
                 elif counts.get("reject", 0) >= quorum:
                     decided = "reject"
             elif counts.get(decision, 0) >= quorum:
                 decided = decision
             if decided is None:
                 return VoteOutcome(task_id, False, None, counts)
-            await self._close(conn, state, task, decided, actor_id, new_statement)
+            await self._close(conn, state, task, decided, actor_id, new_statement, faq_edit)
             return VoteOutcome(task_id, True, decided, counts)
 
     @staticmethod
@@ -263,6 +269,7 @@ class ReviewService:
         decision: str,
         actor_id: int,
         new_statement: str | None,
+        faq_edit: tuple[str, str] | None = None,
     ) -> None:
         payload = task["payload"] or {}
         features = payload.get("features")
@@ -271,6 +278,15 @@ class ReviewService:
                 conn, state.config, state.profile_id, task["target_id"], decision, actor_id, new_statement
             )
             label = int(decision in ("keep", "edit"))
+        elif task["kind"] == "faq_approval":
+            if self.faq is None:
+                raise ValueError("FAQ service not available")
+            if decision in ("approve", "edit"):
+                q, a = faq_edit if (decision == "edit" and faq_edit) else (None, None)
+                await self.faq.approve(conn, state, task["target_id"], actor_id, q, a)
+            else:
+                await self.faq.reject(conn, state, task["target_id"], actor_id)
+            label = int(decision in ("approve", "edit"))
         else:
             label = int(decision == "good")
             await conn.execute(

@@ -114,7 +114,7 @@ class FeedbackButton(discord.ui.DynamicItem[discord.ui.Button[discord.ui.View]],
 
 class ReviewButton(
     discord.ui.DynamicItem[discord.ui.Button[discord.ui.View]],
-    template=r"guru:rv:(?P<task>\d+):(?P<d>keep|reject|edit|good|bad)",
+    template=r"guru:rv:(?P<task>\d+):(?P<d>keep|reject|edit|good|bad|approve)",
 ):
     """Moderator review buttons (D-27). Persistent; any moderator may vote; quorum from config."""
 
@@ -150,3 +150,26 @@ class EditStatementModal(discord.ui.Modal, title="Edit statement"):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         await self.bot.handle_review_click(interaction, self.task_id, "edit", str(self.statement.value).strip())
+
+
+class EditFaqModal(discord.ui.Modal, title="Edit FAQ entry"):
+    def __init__(self, bot: GuruBot, task_id: int, question: str, answer: str) -> None:
+        super().__init__(timeout=900)
+        self.bot = bot
+        self.task_id = task_id
+        self.question: discord.ui.TextInput[EditFaqModal] = discord.ui.TextInput(
+            label="Question", default=question[:200], max_length=200, min_length=8
+        )
+        self.answer: discord.ui.TextInput[EditFaqModal] = discord.ui.TextInput(
+            label="Answer", style=discord.TextStyle.paragraph, default=answer[:1500], max_length=1500, min_length=10
+        )
+        self.add_item(self.question)
+        self.add_item(self.answer)
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        await self.bot.handle_review_click(
+            interaction,
+            self.task_id,
+            "edit",
+            faq_edit=(str(self.question.value).strip(), str(self.answer.value).strip()),
+        )

@@ -35,6 +35,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "answer.related": "Possibly relevant records:",
         "answer.conflict": "Conflicting information — I can't confirm which one is correct:",
         "answer.mixed": "Partly verified",
+        "faq.banner.disputed": "⚔️ Conflicting newer information exists — under review.",
+        "faq.banner.review": "🕒 Under review — the underlying information changed.",
+        "faq.banner.deprecated": "⚠️ DEPRECATED — no longer valid.",
+        "faq.open": "Open in FAQ",
+        "review.faq_title": "📚 New FAQ entry?",
         "answer.no_answer": "I don't have documented knowledge about this yet.",
         "answer.off_topic": "This doesn't look related to {profile}. If it is, add a category, e.g. `#items`.",
         "answer.empty": "Ask me something about {profile}, e.g. `@bot where does the X boss spawn?`",
@@ -75,6 +80,11 @@ STRINGS: dict[str, dict[str, str]] = {
         "answer.related": "Πιθανώς σχετικές καταχωρήσεις:",
         "answer.conflict": "Αντικρουόμενες πληροφορίες — δεν μπορώ να επιβεβαιώσω ποια ισχύει:",
         "answer.mixed": "Εν μέρει επιβεβαιωμένο",
+        "faq.banner.disputed": "⚔️ Υπάρχουν νεότερες αντικρουόμενες πληροφορίες — υπό έλεγχο.",
+        "faq.banner.review": "🕒 Υπό έλεγχο — άλλαξε η πληροφορία στην οποία βασίζεται.",
+        "faq.banner.deprecated": "⚠️ ΚΑΤΑΡΓΗΜΕΝΟ — δεν ισχύει πλέον.",
+        "faq.open": "Άνοιγμα στο FAQ",
+        "review.faq_title": "📚 Νέα καταχώρηση FAQ;",
         "answer.no_answer": "Δεν έχω ακόμα τεκμηριωμένη γνώση γι' αυτό.",
         "answer.off_topic": "Δεν φαίνεται να αφορά το {profile}. Αν αφορά, πρόσθεσε κατηγορία, π.χ. `#items`.",
         "answer.empty": "Ρώτα με κάτι για το {profile}, π.χ. `@bot πού βγαίνει ο boss X;`",
@@ -214,6 +224,23 @@ def render_answer(answer: Any, profile_name: str) -> MessagePayload:
             buttons=list(FEEDBACK_BUTTONS),
         )
 
+    if answer.mode == "faq" and answer.faq:
+        f = answer.faq
+        desc = f["answer"]
+        if f.get("banner"):
+            desc = tr(f"faq.banner.{f['banner']}", style) + "\n\n" + desc
+        fields = [EmbedField(tr("faq.open", style), f"<{f['url']}>")] if f.get("url") else []
+        return MessagePayload(
+            embed=EmbedData(
+                clip(desc, DESC_LIMIT),
+                COLOR["verified"],
+                title=f"📚 {clip(f['question'], 240)}",
+                fields=fields,
+                footer=f"F-{f['id']} · FAQ",
+            ),
+            buttons=list(FEEDBACK_BUTTONS),
+        )
+
     if answer.mode == "conflict":
         lines = [tr("answer.conflict", style)]
         for item in answer.items:
@@ -339,6 +366,30 @@ def render_review(task: dict[str, Any], style: str = "el") -> MessagePayload:
                 ButtonData(f"guru:rv:{tid}:edit", "Edit", "✏️", "secondary"),
             ],
         )
+    if task["kind"] == "faq_approval":
+        fields = [
+            EmbedField(tr("review.question", style), clip(str(p.get("question", "—")), FIELD_LIMIT)),
+            EmbedField(tr("review.answer", style), clip(str(p.get("answer", "—")), FIELD_LIMIT)),
+        ]
+        if p.get("reason"):
+            fields.append(EmbedField("⚠️", str(p["reason"])))
+        if p.get("needs_edit"):
+            fields.append(EmbedField("✏️", "Template draft — please edit the question."))
+        records = ", ".join(f"K-{c}" for c in p.get("claim_ids", []))
+        return MessagePayload(
+            embed=EmbedData(
+                records or "—",
+                COLOR["corroborated"],
+                title=tr("review.faq_title", style),
+                fields=fields,
+                footer=f"F-{task['target_id']} · task {tid}",
+            ),
+            buttons=[
+                ButtonData(f"guru:rv:{tid}:approve", "Approve", "✅", "success"),
+                ButtonData(f"guru:rv:{tid}:edit", "Edit", "✏️", "secondary"),
+                ButtonData(f"guru:rv:{tid}:reject", "Reject", "❌", "danger"),
+            ],
+        )
     items = p.get("items", [])
     answer = (
         "\n".join(
@@ -369,4 +420,23 @@ def render_review(task: dict[str, Any], style: str = "el") -> MessagePayload:
             ButtonData(f"guru:rv:{tid}:good", "Good", "👍", "success"),
             ButtonData(f"guru:rv:{tid}:bad", "Bad", "👎", "danger"),
         ],
+    )
+
+
+def render_faq_post(faq: dict[str, Any], desired_state: str, style: str = "el") -> MessagePayload:
+    """The public FAQ post. Presentation only — the database holds the truth."""
+    desc = faq["answer"]
+    banner = "deprecated" if desired_state == "deprecated" and not faq.get("banner") else faq.get("banner")
+    if banner:
+        desc = tr(f"faq.banner.{banner}", style) + "\n\n" + desc
+    if desired_state == "deprecated":
+        color = COLOR["error"]
+    elif banner == "disputed":
+        color = COLOR["disputed"]
+    else:
+        color = COLOR["verified"]
+    updated = faq.get("updated_at")
+    footer = f"F-{faq['id']} · rev {faq['rev']}" + (f" · {updated:%Y-%m-%d}" if updated else "")
+    return MessagePayload(
+        embed=EmbedData(clip(desc, DESC_LIMIT), color, title=clip(faq["question"], 250), footer=footer)
     )
